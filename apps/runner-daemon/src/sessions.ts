@@ -18,10 +18,12 @@ interface Live {
 
 /** Holds live sessions for this host. The runner daemon is the only process with credentials. */
 export class SessionManager {
-  private runners: Record<string, Runner> = { claude: new ClaudeRunner(), gemini: new GeminiRunner() };
+  private runners: Record<string, Runner>;
   private live = new Map<string, Live>();
   readonly cache = new GrantCache();
-  constructor(private api: ApiClient, private worktrees: WorktreeManager, public readonly runnerId: string) {}
+  constructor(private api: ApiClient, private worktrees: WorktreeManager, public readonly runnerId: string) {
+    this.runners = { claude: new ClaudeRunner("claude", runnerId), gemini: new GeminiRunner("gemini", process.env.GEMINI_BIN ?? "gemini", runnerId) };
+  }
 
   pick(spec: SessionSpec): Runner {
     const v = spec.preferredVendor ?? (spec.reviewerOf ? "gemini" : "claude");

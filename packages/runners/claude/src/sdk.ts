@@ -27,6 +27,21 @@ export async function* runQuery(o: RunQueryOptions): AsyncIterable<SdkMessage> {
       systemPrompt: o.systemPrompt,
       permissionMode: "default",
       abortController: controllerFrom(o.signal),
+      // Fires for EVERY tool use, regardless of permission mode. This is the interceptor.
+      hooks: {
+        PreToolUse: [{
+          hooks: [async (input: any) => {
+            const ok = await o.onToolUse(input.tool_name, input.tool_input ?? {}, input.tool_use_id ?? crypto.randomUUID());
+            return {
+              hookSpecificOutput: {
+                hookEventName: "PreToolUse",
+                permissionDecision: ok ? "allow" : "deny",
+                permissionDecisionReason: ok ? "grant matched" : "Blocked by policy: no grant covers this call",
+              },
+            };
+          }],
+        }],
+      },
       // The interceptor: every tool use passes through here before it runs.
       canUseTool: async (toolName: string, input: Record<string, unknown>, ctx: { toolUseId?: string }) => {
         const ok = await o.onToolUse(toolName, input, ctx.toolUseId ?? crypto.randomUUID());
@@ -39,6 +54,7 @@ export async function* runQuery(o: RunQueryOptions): AsyncIterable<SdkMessage> {
     if (m?.type === "assistant") {
       const text = (m.message?.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
       const u = m.message?.usage ?? {};
+      if (!text && !(u.input_tokens || u.output_tokens)) continue; // tool_use-only turn; the hook already emitted tool_call
       yield { kind: "assistant", text, tokensIn: u.input_tokens ?? 0, tokensOut: u.output_tokens ?? 0, raw: m };
     } else if (m?.type === "user" && Array.isArray(m.message?.content)) {
       for (const c of m.message.content) if (c.type === "tool_result")

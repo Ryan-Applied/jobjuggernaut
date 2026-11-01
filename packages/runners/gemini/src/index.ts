@@ -19,7 +19,7 @@ interface Live { queue: SessionEvent[]; waiters: Array<() => void>; ended: boole
 export class GeminiRunner implements Runner {
   readonly id: string;
   private live = new Map<string, Live>();
-  constructor(id = "gemini", private bin = process.env.GEMINI_BIN ?? "gemini") { this.id = id; }
+  constructor(id = "gemini", private bin = process.env.GEMINI_BIN ?? "gemini", private hostRunnerId = id) { this.id = id; }
 
   async capabilities(): Promise<RunnerCapabilities> {
     return { runnerId: this.id, vendor: "gemini", tools: [...READ_ONLY], maxContextTokens: 1_000_000, supportsResume: false, supportsSubagents: false, costModel: { ...COST, currency: "GBP" } };
@@ -29,7 +29,7 @@ export class GeminiRunner implements Runner {
     const l: Live = { queue: [], waiters: [], ended: false, emit: eventFactory(spec.sessionId) };
     this.live.set(spec.sessionId, l);
     const push = (e: SessionEvent) => { l.queue.push(e); l.waiters.splice(0).forEach((w) => w()); };
-    push(l.emit({ type: "started", runnerId: this.id, vendor: "gemini", vendorSessionRef: spec.sessionId, workdir: spec.workdir }));
+    push(l.emit({ type: "started", runnerId: this.hostRunnerId, vendor: "gemini", vendorSessionRef: spec.sessionId, workdir: spec.workdir }));
 
     const prompt = spec.systemPrompt ? `${spec.systemPrompt}\n\n${spec.prompt}` : spec.prompt;
     const proc = spawn(this.bin, ["-p", prompt, "--output-format", "stream-json", "--sandbox"], { cwd: spec.workdir, env: { ...process.env } });

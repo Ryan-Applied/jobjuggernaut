@@ -29,7 +29,7 @@ const COST = { inputPer1k: 0.0024, outputPer1k: 0.012 };
 export class ClaudeRunner implements Runner {
   readonly id: string;
   private live = new Map<string, Live>();
-  constructor(id = "claude") { this.id = id; }
+  constructor(id = "claude", private hostRunnerId = id) { this.id = id; }
 
   async capabilities(): Promise<RunnerCapabilities> {
     return {
@@ -44,7 +44,7 @@ export class ClaudeRunner implements Runner {
     const l: Live = { spec, ctx, queue: [], waiters: [], ended: false, abort: new AbortController(), emit: eventFactory(spec.sessionId), cumulativeGbp: 0 };
     this.live.set(spec.sessionId, l);
     const push = (e: SessionEvent) => { l.queue.push(e); l.waiters.splice(0).forEach((w) => w()); };
-    push(l.emit({ type: "started", runnerId: this.id, vendor: "claude", vendorSessionRef: spec.sessionId, workdir: spec.workdir }));
+    push(l.emit({ type: "started", runnerId: this.hostRunnerId, vendor: "claude", vendorSessionRef: spec.sessionId, workdir: spec.workdir }));
 
     void (async () => {
       try {
