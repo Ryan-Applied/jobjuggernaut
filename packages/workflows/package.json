@@ -5,12 +5,21 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./workflows": { "types": "./dist/workflows.d.ts", "import": "./dist/workflows.js" },
-    "./activities": { "types": "./dist/activities.d.ts", "import": "./dist/activities.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./workflows": {
+      "types": "./dist/workflows.d.ts",
+      "import": "./dist/workflows.js"
+    },
+    "./activities": {
+      "types": "./dist/activities.d.ts",
+      "import": "./dist/activities.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsx watch src/worker.cloud.ts"
@@ -18,9 +27,12 @@
   "dependencies": {
     "@jj/core": "workspace:*",
     "@jj/graph": "workspace:*",
+    "@temporalio/activity": "^1.11.5",
     "@temporalio/client": "^1.11.5",
     "@temporalio/worker": "^1.11.5",
-    "@temporalio/workflow": "^1.11.5",
-    "@temporalio/activity": "^1.11.5"
+    "@temporalio/workflow": "^1.11.5"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "^1.11.5"
   }
 }

@@ -1,4 +1,4 @@
-import { proxyActivities, setHandler, condition, workflowInfo, executeChild, CancellationScope, isCancellation, uuid4 } from "@temporalio/workflow";
+import { proxyActivities, setHandler, condition, workflowInfo, executeChild, CancellationScope, isCancellation, uuid4, ApplicationFailure } from "@temporalio/workflow";
 import type { LocalActivities, CloudActivities } from "./activities.js";
 import { approveSignal, cancelSignal, statusQuery, CLOUD_QUEUE, localQueue, type SessionStatus, type TaskDefinition, type ApprovalMode } from "./shared.js";
 import type { SessionSpec } from "@jj/core";
@@ -14,7 +14,7 @@ function localFor(runnerId: string) {
     taskQueue: localQueue(runnerId),
     startToCloseTimeout: "4 hours",
     heartbeatTimeout: "30 seconds",
-    retry: { maximumAttempts: 3, initialInterval: "10 seconds" },
+    retry: { maximumAttempts: 3, initialInterval: "2 seconds", nonRetryableErrorTypes: ["SESSION_NOT_LIVE"] },
   });
 }
 
@@ -26,7 +26,7 @@ export interface SessionWorkflowInput { spec: SessionSpec; runnerId: string; tit
  */
 export async function SessionWorkflow(input: SessionWorkflowInput): Promise<SessionStatus> {
   const local = localFor(input.runnerId);
-  const status: SessionStatus = { state: "starting", lastSeq: -1, spendGbp: 0 };
+  const status: SessionStatus = { state: "starting", lastSeq: -1, spendGbp: 0, restarts: 0 };
   let decision: { callId: string; mode: ApprovalMode } | undefined;
   let cancelReason: string | undefined;
 
@@ -47,7 +47,28 @@ export async function SessionWorkflow(input: SessionWorkflowInput): Promise<Sess
         status.state = "cancelled"; status.outcome = "cancelled";
         break;
       }
-      const r = await local.pumpEvents({ sessionId: input.spec.sessionId, fromSeq: status.lastSeq + 1 });
+      let r;
+      try {
+        // Race the pump against a cancel signal so a quiet session can still be cancelled promptly.
+        const pump = local.pumpEvents({ sessionId: input.spec.sessionId, fromSeq: status.lastSeq + 1 });
+        const cancelled = await Promise.race([pump.then(() => false), condition(() => !!cancelReason).then(() => true)]);
+        if (cancelled) {
+          await local.cancelSession({ sessionId: input.spec.sessionId, reason: cancelReason! });
+          r = await pump; // runner emits done:cancelled and the pump drains it
+          status.lastSeq = r.lastSeq; status.spendGbp = r.spendGbp;
+          status.state = "cancelled"; status.outcome = "cancelled";
+          break;
+        }
+        r = await pump;
+      } catch (err) {
+        if (isNotLive(err) && status.restarts < 3) {
+          status.restarts += 1; status.state = "starting";
+          await local.startSession(input.spec);
+          status.state = "running"; status.lastSeq = -1;
+          continue;
+        }
+        throw err;
+      }
       status.lastSeq = r.lastSeq; status.spendGbp = r.spendGbp;
       if (r.ended) { status.state = "done"; status.outcome = r.outcome; break; }
       if (r.parkedCallId) {
@@ -95,6 +116,11 @@ export async function TaskWorkflow(def: TaskDefinition): Promise<{ outcomes: Ses
     previousSessionId = sessionId;
   }
   return { outcomes };
+}
+
+function isNotLive(err: unknown): boolean {
+  const walk = (e: any): boolean => !!e && (String(e.message ?? "").includes("SESSION_NOT_LIVE") || walk(e.cause));
+  return walk(err) || (err instanceof ApplicationFailure && String(err.message).includes("SESSION_NOT_LIVE"));
 }
 
 export { workflowInfo, CancellationScope };

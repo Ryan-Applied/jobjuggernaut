@@ -30,6 +30,19 @@ curl -s localhost:4000/tasks -H 'content-type: application/json' -d '{
 
 With no grants loaded, every tool call parks and shows Approve once / Deny in the UI. That is the policy layer working, not a bug.
 
+## Gotchas found on first run
+
+- Local Postgres on 5432 or 5433 (Postgres.app, Homebrew) silently wins over the container. Compose maps the container to **5440**; `.env.example` matches.
+- Temporal's image cannot write to a root-owned volume, so dev runs in-memory; workflow history resets with the container.
+- `nvm` plus `npm_config_prefix` breaks `pnpm` in fresh tmux panes; `scripts/dev.sh` unsets it.
+- Nothing loads `.env` for you yet: `set -a; source .env; set +a` before any `pnpm dev:*`, or use `pnpm dev` (tmux) which does it.
+
+## Tests
+
+- `pnpm test` runs unit tests (policy matcher).
+- `pnpm test:integration` runs the Phase 1 exit test with the **mock runner** against a Temporal server on `TEMPORAL_ADDRESS`: 5 parallel sessions visible under 2 s, park → approve → resume, grant allow, approver deny, cancel mid-run, and runner-daemon restart mid-session. Do not run it while the dev stack is attached to the same Temporal server (they share queue names).
+- `pnpm dev:mock` runs the whole stack with the mock runner so the UI can be exercised with no vendor keys.
+
 ## Layout
 
 ```
@@ -37,7 +50,7 @@ packages/core        Zod schemas: SessionEvent, SessionSpec, Grant, Ledger; Runn
 packages/policy      forbid rules, grant matcher, GrantCache (shared by cache and service)
 packages/graph       Drizzle schema, migrations, graph queries
 packages/workflows   Temporal: SessionWorkflow, TaskWorkflow, cloud worker
-packages/runners/*   claude (Agent SDK), gemini (CLI, read-only reviewer)
+packages/runners/*   claude (Agent SDK, PreToolUse hook), gemini (CLI, read-only reviewer), openai (Responses API, function tools), mock (tests)
 apps/runner-daemon   local Temporal worker, worktrees, grant cache, event batcher
 apps/api             Hono: ingest, SSE, grants, audit, task start, approvals
 apps/web             Next.js: Sessions screen

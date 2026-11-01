@@ -1,5 +1,5 @@
 import { Worker, NativeConnection } from "@temporalio/worker";
-import { Context } from "@temporalio/activity";
+import { Context, ApplicationFailure } from "@temporalio/activity";
 import type { LocalActivities } from "@jj/workflows";
 import { localQueue } from "@jj/workflows";
 import { SessionManager } from "./sessions.js";
@@ -12,7 +12,10 @@ const manager = new SessionManager(new ApiClient(), new WorktreeManager(), runne
 const activities: LocalActivities = {
   describeRunner: () => manager.describe(),
   startSession: async (spec) => { const h = await manager.start(spec); return { vendorSessionRef: h.vendorSessionRef }; },
-  pumpEvents: ({ sessionId, fromSeq }) => manager.pump(sessionId, fromSeq, (seq) => Context.current().heartbeat(seq)),
+  pumpEvents: ({ sessionId, fromSeq }) => manager.pump(sessionId, fromSeq, (seq) => Context.current().heartbeat(seq), Context.current().cancellationSignal).catch((e) => {
+    if (e?.code === "SESSION_NOT_LIVE") throw ApplicationFailure.nonRetryable(e.message, "SESSION_NOT_LIVE");
+    throw e;
+  }),
   resumeSession: async ({ sessionId, callId, approved }) => manager.resume(sessionId, callId, approved),
   cancelSession: ({ sessionId, reason }) => manager.cancel(sessionId, reason),
 };

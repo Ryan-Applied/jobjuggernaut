@@ -1,7 +1,13 @@
 import type { SessionEvent, Grant } from "@jj/core";
 import { createHash } from "node:crypto";
 
-export class ApiClient {
+export interface ApiLike {
+  postEvents(events: SessionEvent[]): Promise<void>;
+  fetchGrants(ids: string[]): Promise<Grant[]>;
+  audit(row: { sessionId: string; tool: string; args: Record<string, unknown>; decision: string; grantId?: string; decidedBy: string }): Promise<void>;
+}
+
+export class ApiClient implements ApiLike {
   constructor(private base = process.env.API_URL ?? "http://localhost:4000", private token = process.env.RUNNER_API_TOKEN ?? "dev-token") {}
   private headers() { return { "content-type": "application/json", authorization: `Bearer ${this.token}` }; }
 

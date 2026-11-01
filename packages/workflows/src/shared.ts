@@ -15,6 +15,7 @@ export interface SessionStatus {
   parkedGap?: string;
   spendGbp: number;
   outcome?: string;
+  restarts: number;
 }
 
 export interface TaskStep {

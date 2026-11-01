@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One command for the whole Phase 1 stack in tmux.
 # Usage: ./scripts/dev.sh        attach to (or create) the session
+#        JJ_MOCK_RUNNER=1 ./scripts/dev.sh   same stack with the vendor-free mock runner
 #        ./scripts/dev.sh kill   stop everything
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,11 +18,11 @@ pnpm -r --filter './packages/**' build
 set -a; source .env; set +a
 pnpm db:migrate
 
-ENV='set -a; source .env; set +a;'
+ENV='unset npm_config_prefix; set -a; source .env; set +a;'
 tmux new-session -d -s "$SESSION" -n stack -c "$PWD"
 tmux send-keys -t "$SESSION:stack.0" "$ENV pnpm dev:workflows" C-m
 tmux split-window -h -t "$SESSION:stack" -c "$PWD"
-tmux send-keys -t "$SESSION:stack.1" "$ENV sleep 3; pnpm dev:runner" C-m
+tmux send-keys -t "$SESSION:stack.1" "$ENV JJ_MOCK_RUNNER=${JJ_MOCK_RUNNER:-0} sleep 3; pnpm dev:runner" C-m
 tmux split-window -v -t "$SESSION:stack.0" -c "$PWD"
 tmux send-keys -t "$SESSION:stack.2" "$ENV pnpm dev:api" C-m
 tmux split-window -v -t "$SESSION:stack.1" -c "$PWD"

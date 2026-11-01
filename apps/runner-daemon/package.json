@@ -3,14 +3,26 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "dev": "tsx watch src/main.ts", "start": "node dist/main.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/main.ts",
+    "test": "vitest run --testTimeout 60000",
+    "start": "node dist/main.js"
+  },
   "dependencies": {
     "@jj/core": "workspace:*",
     "@jj/policy": "workspace:*",
-    "@jj/workflows": "workspace:*",
     "@jj/runner-claude": "workspace:*",
     "@jj/runner-gemini": "workspace:*",
-    "@temporalio/worker": "^1.11.5",
-    "@temporalio/activity": "^1.11.5"
+    "@jj/runner-mock": "workspace:*",
+    "@jj/runner-openai": "workspace:*",
+    "@jj/workflows": "workspace:*",
+    "@temporalio/activity": "^1.11.5",
+    "@temporalio/worker": "^1.11.5"
+  },
+  "devDependencies": {
+    "@temporalio/client": "^1.11.5",
+    "vitest": "^2.1.8"
   }
 }

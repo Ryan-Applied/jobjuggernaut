@@ -3,7 +3,9 @@ import { GrantCache } from "@jj/policy";
 import { ClaudeRunner } from "@jj/runner-claude";
 import { GeminiRunner } from "@jj/runner-gemini";
 import { WorktreeManager } from "./worktrees.js";
-import { ApiClient } from "./api.js";
+import { ApiClient, type ApiLike } from "./api.js";
+import { MockRunner } from "@jj/runner-mock";
+import { OpenAIRunner } from "@jj/runner-openai";
 
 interface Live {
   runner: Runner;
@@ -21,8 +23,14 @@ export class SessionManager {
   private runners: Record<string, Runner>;
   private live = new Map<string, Live>();
   readonly cache = new GrantCache();
-  constructor(private api: ApiClient, private worktrees: WorktreeManager, public readonly runnerId: string) {
-    this.runners = { claude: new ClaudeRunner("claude", runnerId), gemini: new GeminiRunner("gemini", process.env.GEMINI_BIN ?? "gemini", runnerId) };
+  constructor(private api: ApiLike, private worktrees: WorktreeManager, public readonly runnerId: string, runners?: Record<string, Runner>) {
+    this.runners = runners ?? (process.env.JJ_MOCK_RUNNER === "1"
+      ? { claude: new MockRunner("mock-claude", runnerId), gemini: new MockRunner("mock-gemini", runnerId), openai: new MockRunner("mock-openai", runnerId) }
+      : {
+          claude: new ClaudeRunner("claude", runnerId),
+          gemini: new GeminiRunner("gemini", process.env.GEMINI_BIN ?? "gemini", runnerId),
+          ...(process.env.OPENAI_API_KEY ? { openai: new OpenAIRunner("openai", runnerId) } : {}),
+        });
   }
 
   pick(spec: SessionSpec): Runner {
@@ -61,28 +69,45 @@ export class SessionManager {
    * Drain events until the session ends or parks. Posts to the API in batches.
    * Returns what the SessionWorkflow needs to decide what to do next.
    */
-  async pump(sessionId: string, fromSeq: number, heartbeat: (seq: number) => void) {
+  async pump(sessionId: string, fromSeq: number, heartbeat: (seq: number) => void, signal?: AbortSignal) {
     const l = this.live.get(sessionId);
-    if (!l) throw new Error(`session ${sessionId} not live on this host (restart lost it; workflow will retry start)`);
+    if (!l) { const e: any = new Error(`SESSION_NOT_LIVE ${sessionId}`); e.code = "SESSION_NOT_LIVE"; throw e; }
     let lastSeq = fromSeq - 1;
     let batch: SessionEvent[] = [];
-    const flush = async () => { if (batch.length) { await this.api.postEvents(batch); batch = []; } };
+    let timer: NodeJS.Timeout | undefined;
+    let inflight: Promise<void> = Promise.resolve();
+    const flush = () => {
+      if (timer) { clearTimeout(timer); timer = undefined; }
+      if (!batch.length) return inflight;
+      const b = batch; batch = [];
+      inflight = inflight.then(() => this.api.postEvents(b));
+      return inflight;
+    };
+    // Live UI: anything buffered goes out within 150 ms even if the runner is quiet.
+    const schedule = () => { if (!timer) timer = setTimeout(() => void flush(), 150); };
+    const aborted = () => { const e: any = new Error(`PUMP_ABORTED ${sessionId}`); e.code = "PUMP_ABORTED"; return e; };
+    const next = () => signal
+      ? Promise.race([l.iterator.next(), new Promise<never>((_, rej) => signal.addEventListener("abort", () => rej(aborted()), { once: true }))])
+      : l.iterator.next();
 
-    while (true) {
-      const { value, done } = await l.iterator.next();
-      if (done) { await flush(); l.ended = true; return { lastSeq, ended: true, spendGbp: l.spendGbp, outcome: l.outcome ?? "complete" }; }
-      const e = value as SessionEvent;
-      if (e.seq < fromSeq) continue;
-      lastSeq = e.seq; batch.push(e);
-      if (e.type === "cost") l.spendGbp = e.cumulativeGbp;
-      if (e.type === "done") l.outcome = e.outcome;
-      if (batch.length >= 20) await flush();
-      heartbeat(lastSeq);
-      if (e.type === "approval_request") {
-        await flush();
-        return { lastSeq, ended: false, parkedCallId: e.callId, parkedGap: e.grantGap, spendGbp: l.spendGbp };
+    try {
+      while (true) {
+        if (signal?.aborted) throw aborted();
+        const { value, done } = await next();
+        if (done) { await flush(); l.ended = true; return { lastSeq, ended: true, spendGbp: l.spendGbp, outcome: l.outcome ?? "complete" }; }
+        const e = value as SessionEvent;
+        if (e.seq < fromSeq) continue;
+        lastSeq = e.seq; batch.push(e); schedule();
+        if (e.type === "cost") l.spendGbp = e.cumulativeGbp;
+        if (e.type === "done") l.outcome = e.outcome;
+        if (batch.length >= 20) await flush();
+        heartbeat(lastSeq);
+        if (e.type === "approval_request") {
+          await flush();
+          return { lastSeq, ended: false, parkedCallId: e.callId, parkedGap: e.grantGap, spendGbp: l.spendGbp };
+        }
       }
-    }
+    } finally { await flush().catch(() => undefined); }
   }
 
   resume(sessionId: string, callId: string, approved: boolean) {
