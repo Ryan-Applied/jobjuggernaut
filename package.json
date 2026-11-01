@@ -4,6 +4,8 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "build": "pnpm -r build",
+    "dev": "./scripts/dev.sh",
+    "dev:kill": "./scripts/dev.sh kill",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d",

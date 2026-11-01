@@ -9,7 +9,7 @@ const worker = await Worker.create({
   connection,
   namespace: process.env.TEMPORAL_NAMESPACE ?? "default",
   taskQueue: CLOUD_QUEUE,
-  workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
+  workflowsPath: fileURLToPath(new URL(import.meta.url.endsWith(".ts") ? "./workflows.ts" : "./workflows.js", import.meta.url)),
   activities: createCloudActivities(),
 });
 console.log(`[cloud worker] listening on ${CLOUD_QUEUE}`);

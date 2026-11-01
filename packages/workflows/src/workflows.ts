@@ -1,4 +1,4 @@
-import { proxyActivities, setHandler, condition, workflowInfo, executeChild, CancellationScope, isCancellation } from "@temporalio/workflow";
+import { proxyActivities, setHandler, condition, workflowInfo, executeChild, CancellationScope, isCancellation, uuid4 } from "@temporalio/workflow";
 import type { LocalActivities, CloudActivities } from "./activities.js";
 import { approveSignal, cancelSignal, statusQuery, CLOUD_QUEUE, localQueue, type SessionStatus, type TaskDefinition, type ApprovalMode } from "./shared.js";
 import type { SessionSpec } from "@jj/core";
@@ -77,7 +77,7 @@ export async function TaskWorkflow(def: TaskDefinition): Promise<{ outcomes: Ses
   let previousSessionId: string | undefined;
   for (let i = 0; i < def.steps.length; i++) {
     const step = def.steps[i];
-    const sessionId = crypto.randomUUID();
+    const sessionId = uuid4();
     const spec: SessionSpec = {
       sessionId, workflowId: def.workflowId, taskId: def.taskId, stepIndex: i,
       prompt: step.prompt, skills: step.skills ?? [], connectors: step.connectors ?? [],
