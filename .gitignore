@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.worktrees/
+infra/terraform/.terraform
+infra/terraform/*.tfstate*

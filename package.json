@@ -1,0 +1,22 @@
+{
+  "name": "jobjuggernaut",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:infra": "docker compose -f docker-compose.dev.yml up -d",
+    "dev:api": "pnpm --filter @jj/api dev",
+    "dev:web": "pnpm --filter @jj/web dev",
+    "dev:runner": "pnpm --filter @jj/runner-daemon dev",
+    "dev:workflows": "pnpm --filter @jj/workflows dev",
+    "db:migrate": "pnpm --filter @jj/graph migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.2"
+  }
+}
