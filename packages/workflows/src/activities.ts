@@ -11,7 +11,9 @@ export interface LocalActivities {
   startSession(spec: SessionSpec): Promise<{ vendorSessionRef: string }>;
   /** Pumps events from the runner's stream to the API in batches, returning when the session ends or parks. Heartbeats lastSeq. */
   pumpEvents(input: { sessionId: string; fromSeq: number }): Promise<{ lastSeq: number; ended: boolean; parkedCallId?: string; parkedGap?: string; spendGbp: number; outcome?: string }>;
-  resumeSession(input: { sessionId: string; callId: string; approved: boolean }): Promise<void>;
+  resumeSession(input: { sessionId: string; callId: string; approved: boolean; grantIds?: string[] }): Promise<void>;
+  /** Read-only look at a project workdir for the continuation pack. */
+  inspectWorkdir(input: { workdir: string }): Promise<{ isRepo: boolean; branch?: string; dirty?: number; recentCommits?: string[]; openBranches?: string[]; hasClaudeMd?: boolean; files?: number }>;
   cancelSession(input: { sessionId: string; reason: string }): Promise<void>;
 }
 
@@ -21,7 +23,15 @@ export interface CloudActivities {
   recordOutcome(input: { sessionId: string; outcome: string; spendGbp: number }): Promise<void>;
   postSlackCard(input: { sessionId: string; callId: string; gap: string }): Promise<void>;
   startIndexing(input: { sessionId: string }): Promise<void>;
+  /** Graph side of the continuation pack: recent sessions, lessons, open items for a project. */
+  projectContext(input: { projectId: string }): Promise<string>;
+  markTask(input: { taskId: string; state: string; extra?: Record<string, unknown> }): Promise<void>;
+  /** Tasks queued for tonight with their ledger status. */
+  tonightTasks(input: { until: string }): Promise<Array<{ def: TaskDefinition; signedGrantIds?: string[] }>>;
+  /** Chore fire: create a task node + ledger from the chore's template; returns the definition to run. */
+  materialiseChore(input: { choreId: string }): Promise<{ def: TaskDefinition } | { skipped: string }>;
 }
+import type { TaskDefinition } from "./shared.js";
 
 export interface IndexerActivities {
   indexSession(input: { sessionId: string }): Promise<{ similar: number; edges: number; lessons: number }>;

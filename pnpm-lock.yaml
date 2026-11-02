@@ -32,9 +32,15 @@ importers:
       '@jj/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@jj/policy':
+        specifier: workspace:^
+        version: link:../../packages/policy
       '@jj/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
+      '@temporalio/client':
+        specifier: ^1.11.5
+        version: 1.25.0(long@5.3.2)(protobufjs@8.8.1)
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.1)
@@ -231,6 +237,9 @@ importers:
       '@temporalio/workflow':
         specifier: ^1.11.5
         version: 1.25.0(long@5.3.2)(protobufjs@8.8.1)
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.1)
     devDependencies:
       '@temporalio/testing':
         specifier: ^1.11.5

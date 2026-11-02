@@ -45,6 +45,10 @@ function cloudActivities(): CloudActivities {
     async recordOutcome({ sessionId, outcome, spendGbp }) { nodes.set(sessionId, { ...nodes.get(sessionId), outcome, spendGbp }); },
     async postSlackCard(p) { parked.push(p); },
     async startIndexing() {},
+    async projectContext() { return ""; },
+    async markTask() {},
+    async tonightTasks() { return []; },
+    async materialiseChore() { return { skipped: "test" }; },
   };
 }
 
@@ -56,7 +60,8 @@ function localActivities(manager: SessionManager): LocalActivities {
       if (e?.code === "SESSION_NOT_LIVE") throw ApplicationFailure.nonRetryable(e.message, "SESSION_NOT_LIVE");
       throw e;
     }),
-    resumeSession: async ({ sessionId, callId, approved }) => manager.resume(sessionId, callId, approved),
+    resumeSession: ({ sessionId, callId, approved, grantIds }) => manager.resume(sessionId, callId, approved, grantIds),
+    inspectWorkdir: ({ workdir }) => manager.inspect(workdir),
     cancelSession: ({ sessionId, reason }) => manager.cancel(sessionId, reason),
   };
 }

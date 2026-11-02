@@ -16,7 +16,8 @@ const activities: LocalActivities = {
     if (e?.code === "SESSION_NOT_LIVE") throw ApplicationFailure.nonRetryable(e.message, "SESSION_NOT_LIVE");
     throw e;
   }),
-  resumeSession: async ({ sessionId, callId, approved }) => manager.resume(sessionId, callId, approved),
+  resumeSession: ({ sessionId, callId, approved, grantIds }) => manager.resume(sessionId, callId, approved, grantIds),
+  inspectWorkdir: ({ workdir }) => manager.inspect(workdir),
   cancelSession: ({ sessionId, reason }) => manager.cancel(sessionId, reason),
 };
 

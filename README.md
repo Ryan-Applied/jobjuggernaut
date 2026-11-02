@@ -30,6 +30,14 @@ curl -s localhost:4000/tasks -H 'content-type: application/json' -d '{
 
 With no grants loaded, every tool call parks and shows Approve once / Deny in the UI. That is the policy layer working, not a bug.
 
+## How a day runs
+
+1. **Today** shows one card per project: last session, parked items, go-aheads waiting, spend, lessons. Continue a project in **auto** (template grants signed, pauses only on forbid rules and caps), **assist** (template grants minus outward actions, pauses between steps for your go-ahead) or **manual** (no grants, every call parks). Or **Queue tonight**.
+2. A project is a name, a repo or folder to work in (repo => worktree per session, folder => in place, none => scratch), a goal, a default mode and a grant template. Every session starts with a **continuation pack**: the goal, the last sessions' outcomes and lessons, open approvals, and a live look at the workdir (branch, dirty files, recent commits, CLAUDE.md). "Bring in" a session from another project to fold its prompt and lessons into the pack.
+3. **Approvals**: draft ledgers for tonight's queue (edit caps, drop grants, sign), parked calls (approve once / add to grant / deny), assist go-aheads. Slack gets the same card when configured.
+4. **Chores** are Temporal Schedules; each fire builds a fresh task and ledger from the project's current template. System schedules: overnight batch 22:00, nightly learn 03:00.
+5. The **indexer** embeds each finished session, links similar ones, extracts lessons and proposes grant-template and skill edits; nothing changes without your accept.
+
 ## Gotchas found on first run
 
 - Local Postgres on 5432 or 5433 (Postgres.app, Homebrew) silently wins over the container. Compose maps the container to **5440**; `.env.example` matches.
@@ -52,9 +60,9 @@ packages/graph       Drizzle schema, migrations, graph queries
 packages/workflows   Temporal: SessionWorkflow, TaskWorkflow, cloud worker
 packages/runners/*   claude (Agent SDK, PreToolUse hook), gemini (CLI, read-only reviewer), openai (Responses API, function tools), mock (tests)
 apps/runner-daemon   local Temporal worker, worktrees, grant cache, event batcher
-apps/api             Hono: ingest, SSE, grants, audit, task start, approvals
-apps/web             Next.js: Sessions screen
-apps/indexer         Phase 2; structural edges only for now
+apps/api             Hono: ingest, SSE, projects, workflows, ledgers, approvals, chores, brief, Slack
+apps/web             Next.js: Today, Sessions, Graph, Workflows, Project, Approvals, Chores, Proposals
+apps/indexer         indexer worker (indexer queue)
 infra/terraform      cloud shape, applied after the Phase 1 gate
 skills/              SKILL.md per skill
 ```

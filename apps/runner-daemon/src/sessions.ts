@@ -47,8 +47,9 @@ export class SessionManager {
 
   async start(spec: SessionSpec) {
     await this.loadGrants(spec.sessionId, spec.grantIds);
-    const workdir = await this.worktrees.prepare(spec.sessionId);
+    const { dir: workdir, isolation } = await this.worktrees.prepare(spec.sessionId, spec.projectWorkdir, spec.isolation);
     const runner = this.pick(spec);
+    const prompt = spec.context ? `${spec.context}\n\n---\n\n# Task\n${spec.prompt}` : spec.prompt;
     const ctx: RunnerContext = {
       checkPolicy: async (c) => {
         const res = this.cache.check(c);
@@ -59,7 +60,7 @@ export class SessionManager {
         const l = this.live.get(sessionId); if (l) l.parked = { callId, resolve }; else resolve(false);
       }),
     };
-    const handle = await runner.start({ ...spec, workdir }, ctx);
+    const handle = await runner.start({ ...spec, workdir, prompt, isolation: isolation as any }, ctx);
     const iterator = runner.stream(handle)[Symbol.asyncIterator]();
     this.live.set(spec.sessionId, { runner, handle, buffer: [], iterator, spendGbp: 0, ended: false });
     return handle;
@@ -110,10 +111,13 @@ export class SessionManager {
     } finally { await flush().catch(() => undefined); }
   }
 
-  resume(sessionId: string, callId: string, approved: boolean) {
+  async resume(sessionId: string, callId: string, approved: boolean, grantIds?: string[]) {
+    if (grantIds?.length) this.cache.append(sessionId, await this.api.fetchGrants(grantIds));
     const l = this.live.get(sessionId);
     if (l?.parked?.callId === callId) { l.parked.resolve(approved); l.parked = undefined; }
   }
+
+  inspect(workdir: string) { return this.worktrees.inspect(workdir); }
 
   async cancel(sessionId: string, reason: string) {
     const l = this.live.get(sessionId);

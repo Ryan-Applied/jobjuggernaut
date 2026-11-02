@@ -4,6 +4,7 @@ import { matchGrants } from "./matcher.js";
 
 export * from "./forbid.js";
 export * from "./matcher.js";
+export * from "./ledger.js";
 
 /** Forbid rules first (no grant overrides them), then grant matching. */
 export function checkPolicy(grants: Grant[], c: PolicyCheck, now = new Date()): PolicyResult {
@@ -17,6 +18,7 @@ export class GrantCache {
   private bySession = new Map<string, Grant[]>();
   load(sessionId: string, grants: Grant[]) { this.bySession.set(sessionId, grants); }
   grantsFor(sessionId: string) { return this.bySession.get(sessionId) ?? []; }
+  append(sessionId: string, grants: Grant[]) { this.bySession.set(sessionId, [...this.grantsFor(sessionId), ...grants]); }
   check(c: PolicyCheck, now = new Date()): PolicyResult {
     const res = checkPolicy(this.grantsFor(c.sessionId), c, now);
     if (res.decision === "allow" && res.grantId) {

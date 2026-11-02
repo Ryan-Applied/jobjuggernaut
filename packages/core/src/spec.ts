@@ -1,10 +1,15 @@
 import { z } from "zod";
 import { Vendor } from "./events.js";
 
+export const Mode = z.enum(["auto", "assist", "manual"]);
+export type Mode = z.infer<typeof Mode>;
+
 export const SessionSpec = z.object({
   sessionId: z.string().uuid(),
   workflowId: z.string().uuid(),
   taskId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
+  mode: Mode.default("assist"),
   stepIndex: z.number().int().nonnegative().default(0),
   prompt: z.string(),
   systemPrompt: z.string().optional(),
@@ -12,6 +17,11 @@ export const SessionSpec = z.object({
   connectors: z.array(z.string()).default([]),
   grantIds: z.array(z.string().uuid()).default([]),
   workdir: z.string(),
+  /** Project workdir on the runner host. Repo => worktree per session; folder => in place; absent => scratch. */
+  projectWorkdir: z.string().optional(),
+  isolation: z.enum(["worktree", "inplace", "scratch"]).optional(),
+  /** Continuation pack: what the session should know before it starts. Prepended to the prompt. */
+  context: z.string().optional(),
   budget: z.object({
     maxTokens: z.number().int().positive().optional(),
     maxCostGbp: z.number().positive(),

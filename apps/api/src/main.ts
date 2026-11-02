@@ -9,6 +9,9 @@ import { createDb, appendEvents, recordDecision, upsertSessionNode, neighbourhoo
 import { temporalClient, startTask, approve, cancel, status, type TaskDefinition } from "@jj/workflows";
 import { EventBus } from "./bus.js";
 import { graphRoutes } from "./graph.routes.js";
+import { projectRoutes } from "./projects.routes.js";
+import { ledgerRoutes, ledgerForTaskMode, signedGrantIdsForTask } from "./ledgers.routes.js";
+import { choreRoutes, ensureSystemSchedules } from "./chores.routes.js";
 
 const { db } = createDb();
 const bus = new EventBus();
@@ -33,7 +36,7 @@ app.post("/events", auth, async (c) => {
     bus.publish(e);
     if (e.type === "started") await upsertSessionNode(db, e.sessionId, "", { state: "running", vendor: e.vendor, runnerId: e.runnerId, startedAt: e.ts });
     if (e.type === "cost") await upsertSessionNode(db, e.sessionId, "", { spendGbp: e.cumulativeGbp, tokensIn: e.tokensIn, tokensOut: e.tokensOut });
-    if (e.type === "approval_request") await upsertSessionNode(db, e.sessionId, "", { state: "parked", parkedCallId: e.callId, parkedGap: e.grantGap });
+    if (e.type === "approval_request") await upsertSessionNode(db, e.sessionId, "", { state: "parked", parkedCallId: e.callId, parkedGap: e.grantGap, parkedTool: e.tool, parkedArgs: e.args, parkedAt: e.ts });
     if (e.type === "done") { await upsertSessionNode(db, e.sessionId, "", { state: "done", outcome: e.outcome, endedAt: e.ts }); }
     if (e.type === "message" || e.type === "tool_call" || e.type === "tool_result") await upsertSessionNode(db, e.sessionId, "", { lastEvent: summary(e), lastEventAt: e.ts });
   }
@@ -43,6 +46,7 @@ app.post("/events", auth, async (c) => {
 app.post("/audit", auth, async (c) => {
   const row = z.object({ sessionId: z.string().uuid(), tool: z.string(), argsHash: z.string(), decision: z.string(), grantId: z.string().uuid().optional(), decidedBy: z.string() }).parse(await c.req.json());
   await recordDecision(db, row);
+  if (row.decision === "allow" && row.grantId) await db.execute(sql`update grants set used = jsonb_set(used, '{count}', (coalesce((used->>'count')::int,0) + 1)::text::jsonb) where id = ${row.grantId}`);
   return c.json({ ok: true });
 });
 
@@ -116,16 +120,28 @@ app.post("/tasks", async (c) => {
   const h = await startTask(temporal, def);
   return c.json({ taskId: def.taskId, workflowRunId: h.firstExecutionRunId });
 });
-app.post("/approvals/:callId", async (c) => {
-  const body = z.object({ sessionId: z.string().uuid(), mode: z.enum(["once", "widen", "deny"]) }).parse(await c.req.json());
-  await approve(temporal, body.sessionId, c.req.param("callId"), body.mode);
-  await upsertSessionNode(db, body.sessionId, "", { state: "running", parkedCallId: null, parkedGap: null });
-  await recordDecision(db, { sessionId: body.sessionId, tool: "approval", argsHash: c.req.param("callId"), decision: body.mode === "deny" ? "deny" : "allow", decidedBy: "you:ui" });
-  return c.json({ ok: true });
-});
 app.post("/sessions/:id/cancel", async (c) => { await cancel(temporal, c.req.param("id"), "cancelled from UI"); return c.json({ ok: true }); });
 
 app.route("/", graphRoutes(db));
+app.route("/", projectRoutes(db, temporal));
+app.route("/", ledgerRoutes(db, temporal));
+app.route("/", choreRoutes(db, temporal));
+
+app.post("/internal/materialise", async (c) => {
+  const { choreId, taskId } = await c.req.json();
+  const [ch] = (await db.execute(sql`select title, props from nodes where id = ${choreId}`)) as any[];
+  if (!ch) return c.json({ error: "chore not found" }, 404);
+  const def = ch.props.def; const mode = ch.props.mode ?? "auto";
+  const [pj] = def.projectId ? (await db.execute(sql`select props from nodes where id = ${def.projectId}`)) as any[] : [undefined];
+  const [wf] = (await db.execute(sql`select props from nodes where id = ${def.workflowId}`)) as any[];
+  // refresh the snapshot from the live project/workflow so edits apply to the next fire
+  const steps = (pj?.props?.continueSteps ?? wf?.props?.steps ?? def.steps);
+  const title = `${ch.title} ${new Date().toISOString().slice(0, 16)}`;
+  await db.execute(sql`insert into nodes (id, type, title, props) values (${taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: def.workflowId, projectId: def.projectId, mode, projectWorkdir: pj?.props?.workdir ?? def.projectWorkdir, choreId, state: "starting" })}::jsonb)`);
+  await db.execute(sql`insert into edges (src, dst, type) values (${taskId}, ${choreId}, 'scheduled_by') on conflict do nothing`);
+  const ledger = await ledgerForTaskMode(db, taskId, mode, steps, pj?.props?.grantTemplate ?? wf?.props?.grantTemplate ?? []);
+  return c.json({ def: { steps, title, mode, projectWorkdir: pj?.props?.workdir ?? def.projectWorkdir }, grantIds: ledger?.status === "signed" ? await signedGrantIdsForTask(db, taskId) : [] });
+});
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 
@@ -136,6 +152,7 @@ function summary(e: SessionEvent): string {
   return e.type;
 }
 
+await ensureSystemSchedules(temporal).catch((e) => console.error("[api] schedules", e));
 const port = Number(process.env.API_PORT ?? 4000);
 serve({ fetch: app.fetch, port });
 console.log(`[api] listening on :${port}`);
