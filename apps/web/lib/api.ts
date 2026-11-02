@@ -19,3 +19,6 @@ export async function approve(sessionId: string, callId: string, mode: "once" | 
 export async function cancelSession(id: string) {
   await fetch(`${API}/sessions/${id}/cancel`, { method: "POST" });
 }
+
+export const get = async <T,>(path: string): Promise<T> => (await fetch(`${API}${path}`, { cache: "no-store" })).json();
+export const post = async <T,>(path: string, body?: unknown): Promise<T> => (await fetch(`${API}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined })).json();

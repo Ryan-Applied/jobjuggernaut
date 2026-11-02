@@ -1,6 +1,7 @@
 import { defineSignal, defineQuery } from "@temporalio/workflow";
 
 export const CLOUD_QUEUE = "cloud";
+export const INDEXER_QUEUE = "indexer";
 export const localQueue = (runnerId: string) => `local-${runnerId}`;
 
 export type ApprovalMode = "once" | "widen" | "deny";

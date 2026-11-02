@@ -1,36 +1,30 @@
-/**
- * Phase 2. Turns a finished session into graph structure:
- *   summary -> embedding (Voyage 3) -> similar_to edges -> structural edges -> lessons.
- * Phase 1 ships the structural-edge pass only so the graph explorer has something to show.
- */
-import { createDb, addEdge } from "@jj/graph";
+/** Indexer worker: runs IndexerActivities on the "indexer" queue. */
+import { Worker, NativeConnection } from "@temporalio/worker";
 import { sql } from "drizzle-orm";
+import { createDb } from "@jj/graph";
+import { indexSession, proposeForWorkflow, defaultEmbedder } from "@jj/indexer";
+import { INDEXER_QUEUE, type IndexerActivities } from "@jj/workflows";
 
 const { db } = createDb();
+const embedder = defaultEmbedder();
 
-export async function indexSession(sessionId: string) {
-  const events = await db.execute(sql`select payload from session_events where session_id = ${sessionId} order by seq`);
-  const touched = new Map<string, number>();
-  for (const r of events as any[]) {
-    const e = r.payload;
-    if (e.type === "tool_call") {
-      const connector = String(e.tool).split(".")[0];
-      touched.set(connector, (touched.get(connector) ?? 0) + 1);
-    }
-  }
-  for (const [connector, n] of touched) {
-    const id = await connectorNode(connector);
-    await addEdge(db, sessionId, id, "touched", n);
-  }
-  return { touched: [...touched.entries()] };
-}
+const activities: IndexerActivities = {
+  async indexSession({ sessionId }) {
+    const r = await indexSession(db, sessionId, embedder);
+    console.log(`[indexer] ${sessionId.slice(0, 8)} similar=${r.similar.length} edges=${r.edges} lessons=${r.lessons.length}`);
+    return { similar: r.similar.length, edges: r.edges, lessons: r.lessons.length };
+  },
+  async proposeForWorkflow({ workflowId }) {
+    const ids = await proposeForWorkflow(db, workflowId);
+    return { proposals: ids.length };
+  },
+  async listWorkflowIds() {
+    const rows = (await db.execute(sql`select id from nodes where type = 'workflow'`)) as any[];
+    return rows.map((r) => r.id);
+  },
+};
 
-async function connectorNode(name: string): Promise<string> {
-  const rows = await db.execute(sql`select id from nodes where type = 'connector' and title = ${name}`);
-  if (rows.length) return (rows[0] as any).id;
-  const id = crypto.randomUUID();
-  await db.execute(sql`insert into nodes (id, type, title) values (${id}, 'connector', ${name})`);
-  return id;
-}
-
-if (process.argv[2]) indexSession(process.argv[2]).then((r) => { console.log(r); process.exit(0); });
+const connection = await NativeConnection.connect({ address: process.env.TEMPORAL_ADDRESS ?? "localhost:7233" });
+const worker = await Worker.create({ connection, namespace: process.env.TEMPORAL_NAMESPACE ?? "default", taskQueue: INDEXER_QUEUE, activities });
+console.log(`[indexer] listening on ${INDEXER_QUEUE} with ${embedder.name}`);
+await worker.run();

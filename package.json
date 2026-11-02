@@ -15,6 +15,7 @@
     "dev:web": "pnpm --filter @jj/web dev",
     "dev:runner": "pnpm --filter @jj/runner-daemon dev",
     "dev:workflows": "pnpm --filter @jj/workflows dev",
+    "dev:indexer": "pnpm --filter @jj/indexer dev",
     "db:migrate": "pnpm --filter @jj/graph migrate"
   },
   "devDependencies": {

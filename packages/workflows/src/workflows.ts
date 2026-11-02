@@ -1,6 +1,6 @@
 import { proxyActivities, setHandler, condition, workflowInfo, executeChild, CancellationScope, isCancellation, uuid4, ApplicationFailure } from "@temporalio/workflow";
-import type { LocalActivities, CloudActivities } from "./activities.js";
-import { approveSignal, cancelSignal, statusQuery, CLOUD_QUEUE, localQueue, type SessionStatus, type TaskDefinition, type ApprovalMode } from "./shared.js";
+import type { LocalActivities, CloudActivities, IndexerActivities } from "./activities.js";
+import { approveSignal, cancelSignal, statusQuery, CLOUD_QUEUE, INDEXER_QUEUE, localQueue, type SessionStatus, type TaskDefinition, type ApprovalMode } from "./shared.js";
 import type { SessionSpec } from "@jj/core";
 
 const cloud = proxyActivities<CloudActivities>({
@@ -8,6 +8,25 @@ const cloud = proxyActivities<CloudActivities>({
   startToCloseTimeout: "30 seconds",
   retry: { maximumAttempts: 5 },
 });
+
+const indexer = proxyActivities<IndexerActivities>({
+  taskQueue: INDEXER_QUEUE,
+  startToCloseTimeout: "5 minutes",
+  retry: { maximumAttempts: 3, initialInterval: "5 seconds" },
+});
+
+/** Embed, link, extract lessons for one finished session. */
+export async function IndexWorkflow(input: { sessionId: string }) {
+  return indexer.indexSession(input);
+}
+
+/** Nightly: proposals for every workflow. Scheduled by the API (Phase 4). */
+export async function NightlyLearnWorkflow() {
+  const ids = await indexer.listWorkflowIds();
+  let proposals = 0;
+  for (const workflowId of ids) proposals += (await indexer.proposeForWorkflow({ workflowId })).proposals;
+  return { workflows: ids.length, proposals };
+}
 
 function localFor(runnerId: string) {
   return proxyActivities<LocalActivities>({
@@ -34,7 +53,7 @@ export async function SessionWorkflow(input: SessionWorkflowInput): Promise<Sess
   setHandler(approveSignal, (callId, mode) => { decision = { callId, mode }; });
   setHandler(cancelSignal, (reason) => { cancelReason = reason; });
 
-  await cloud.createSessionNode({ sessionId: input.spec.sessionId, title: input.title, props: { state: "starting", runnerId: input.runnerId, workflowId: input.spec.workflowId, taskId: input.spec.taskId } });
+  await cloud.createSessionNode({ sessionId: input.spec.sessionId, title: input.title, props: { state: "starting", runnerId: input.runnerId, workflowId: input.spec.workflowId, taskId: input.spec.taskId, prompt: input.spec.prompt, skills: input.spec.skills, grantIds: input.spec.grantIds, stepIndex: input.spec.stepIndex, vendor: input.spec.preferredVendor } });
   await cloud.linkSessionToWorkflow({ sessionId: input.spec.sessionId, workflowId: input.spec.workflowId, taskId: input.spec.taskId });
 
   await local.startSession(input.spec);

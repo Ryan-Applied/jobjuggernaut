@@ -23,5 +23,11 @@ export interface CloudActivities {
   startIndexing(input: { sessionId: string }): Promise<void>;
 }
 
-export type Activities = LocalActivities & CloudActivities;
+export interface IndexerActivities {
+  indexSession(input: { sessionId: string }): Promise<{ similar: number; edges: number; lessons: number }>;
+  proposeForWorkflow(input: { workflowId: string }): Promise<{ proposals: number }>;
+  listWorkflowIds(): Promise<string[]>;
+}
+
+export type Activities = LocalActivities & CloudActivities & IndexerActivities;
 export type { SessionEvent };

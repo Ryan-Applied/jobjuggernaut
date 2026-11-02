@@ -1,5 +1,7 @@
 import { createDb, upsertSessionNode, addEdge } from "@jj/graph";
 import type { CloudActivities } from "./activities.js";
+import { Connection, Client } from "@temporalio/client";
+import { CLOUD_QUEUE } from "./shared.js";
 
 export function createCloudActivities(): CloudActivities {
   const { db } = createDb();
@@ -20,7 +22,10 @@ export function createCloudActivities(): CloudActivities {
       await fetch(`${apiUrl}/internal/parked`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId, callId, gap }) }).catch(() => undefined);
     },
     async startIndexing({ sessionId }) {
-      await fetch(`${apiUrl}/internal/index`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId }) }).catch(() => undefined);
+      const connection = await Connection.connect({ address: process.env.TEMPORAL_ADDRESS ?? "localhost:7233" });
+      const client = new Client({ connection, namespace: process.env.TEMPORAL_NAMESPACE ?? "default" });
+      await client.workflow.start("IndexWorkflow", { args: [{ sessionId }], taskQueue: CLOUD_QUEUE, workflowId: `index-${sessionId}` }).catch((e) => { if (!String(e).includes("already")) throw e; });
+      await connection.close();
     },
   };
 }

@@ -8,15 +8,16 @@ import { SessionEvent, Grant } from "@jj/core";
 import { createDb, appendEvents, recordDecision, upsertSessionNode, neighbourhood, similarSessions } from "@jj/graph";
 import { temporalClient, startTask, approve, cancel, status, type TaskDefinition } from "@jj/workflows";
 import { EventBus } from "./bus.js";
+import { graphRoutes } from "./graph.routes.js";
 
 const { db } = createDb();
 const bus = new EventBus();
 const temporal = await temporalClient();
 const tokens = new Set((process.env.API_INGEST_TOKENS ?? "dev-token").split(","));
-const parked = new Map<string, { sessionId: string; callId: string; gap: string; at: string }>();
 
 const app = new Hono();
 app.use("*", cors());
+app.onError((err, c) => { console.error(`[api] ${c.req.method} ${c.req.path}:`, err); return c.json({ error: String(err) }, 500); });
 
 const auth = (c: any, next: any) => {
   const t = (c.req.header("authorization") ?? "").replace("Bearer ", "");
@@ -48,7 +49,7 @@ app.post("/audit", auth, async (c) => {
 app.get("/grants", auth, async (c) => {
   const ids = (c.req.query("ids") ?? "").split(",").filter(Boolean);
   if (!ids.length) return c.json({ grants: [] });
-  const rows = await db.execute(sql`select g.*, l.expires_at from grants g join ledgers l on l.id = g.ledger_id where g.id = any(${ids}::uuid[]) and l.status = 'signed'`);
+  const rows = await db.execute(sql`select g.*, l.expires_at from grants g join ledgers l on l.id = g.ledger_id where g.id = any(${`{${ids.join(",")}}`}::uuid[]) and l.status = 'signed'`);
   const grants = rows.map((r: any) => Grant.parse({ id: r.id, ledgerId: r.ledger_id, action: r.action, scope: r.scope, cap: r.cap ?? {}, used: r.used, expiresAt: new Date(r.expires_at).toISOString(), delegated: !!r.delegated }));
   return c.json({ grants });
 });
@@ -56,10 +57,14 @@ app.get("/grants", auth, async (c) => {
 // --- internal hooks from cloud activities ------------------------------------
 app.post("/internal/parked", async (c) => {
   const b = await c.req.json();
-  parked.set(b.callId, { ...b, at: new Date().toISOString() });
+  await upsertSessionNode(db, b.sessionId, "", { state: "parked", parkedCallId: b.callId, parkedGap: b.gap, parkedAt: new Date().toISOString() });
   return c.json({ ok: true });
 });
-app.post("/internal/index", async (c) => c.json({ ok: true, note: "indexer wired in Phase 2" }));
+app.post("/internal/index", async (c) => {
+  const b = await c.req.json();
+  await temporal.workflow.start("IndexWorkflow", { args: [{ sessionId: b.sessionId }], taskQueue: "cloud", workflowId: `index-${b.sessionId}-${Date.now()}` });
+  return c.json({ ok: true });
+});
 
 // --- reads for the pane of glass ---------------------------------------------
 app.get("/sessions", async (c) => {
@@ -74,7 +79,10 @@ app.get("/sessions/:id/status", async (c) => {
   try { return c.json(await status(temporal, c.req.param("id"))); } catch { return c.json({ state: "unknown" }, 404); }
 });
 app.get("/sessions/:id/neighbours", async (c) => c.json({ neighbours: await neighbourhood(db, c.req.param("id")), similar: await similarSessions(db, c.req.param("id")) }));
-app.get("/parked", (c) => c.json({ parked: [...parked.values()] }));
+app.get("/parked", async (c) => {
+  const rows = await db.execute(sql`select id, title, props from nodes where type = 'session' and props->>'state' = 'parked' order by (props->>'parkedAt') asc nulls last`);
+  return c.json({ parked: (rows as any[]).map((r) => ({ sessionId: r.id, title: r.title, callId: r.props.parkedCallId, gap: r.props.parkedGap, at: r.props.parkedAt, tool: String(r.props.parkedGap ?? "").replace(/^no grant for /, "") })) });
+});
 
 app.get("/events", (c) => {
   const since = Number(c.req.query("since") ?? 0);
@@ -88,13 +96,22 @@ app.get("/events", (c) => {
 
 // --- commands ------------------------------------------------------------------
 const StartTask = z.object({
-  title: z.string(), workflowId: z.string().uuid(), runnerId: z.string().default(process.env.DEFAULT_RUNNER_ID ?? "laptop"), grantIds: z.array(z.string().uuid()).default([]),
-  steps: z.array(z.object({ name: z.string(), prompt: z.string(), skills: z.array(z.string()).optional(), connectors: z.array(z.string()).optional(), requires: z.array(z.string()).optional(), preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(), maxCostGbp: z.number().positive() })).min(1),
+  title: z.string().optional(), workflowId: z.string().uuid(), runnerId: z.string().default(process.env.DEFAULT_RUNNER_ID ?? "laptop"), grantIds: z.array(z.string().uuid()).default([]),
+  steps: z.array(z.object({ name: z.string(), prompt: z.string(), skills: z.array(z.string()).optional(), connectors: z.array(z.string()).optional(), requires: z.array(z.string()).optional(), preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(), maxCostGbp: z.number().positive() })).min(1).optional(),
+  scheduledFor: z.string().datetime().optional(),   // set => queued for the overnight batch instead of starting now
 });
 app.post("/tasks", async (c) => {
   const body = StartTask.parse(await c.req.json());
-  const def: TaskDefinition = { taskId: crypto.randomUUID(), ...body };
-  await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${def.title}, ${JSON.stringify({ steps: def.steps.length, runnerId: def.runnerId })}::jsonb) on conflict do nothing`);
+  const [wf] = (await db.execute(sql`select title, props from nodes where id = ${body.workflowId} and type = 'workflow'`)) as any[];
+  const steps = body.steps ?? wf?.props?.steps;
+  if (!steps?.length) return c.json({ error: "no steps: pass steps or a workflowId with a definition" }, 400);
+  const title = body.title ?? wf?.title ?? "Task";
+  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? "laptop", grantIds: body.grantIds, steps };
+  if (body.scheduledFor) {
+    await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: body.workflowId, scheduledFor: body.scheduledFor, state: "queued" })}::jsonb)`);
+    return c.json({ taskId: def.taskId, queued: true });
+  }
+  await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${def.title}, ${JSON.stringify({ steps: def.steps.length, runnerId: def.runnerId, workflowId: def.workflowId, state: "started" })}::jsonb) on conflict do nothing`);
   await db.execute(sql`insert into nodes (id, type, title, props) values (${def.workflowId}, 'workflow', ${def.title}, '{}'::jsonb) on conflict do nothing`);
   const h = await startTask(temporal, def);
   return c.json({ taskId: def.taskId, workflowRunId: h.firstExecutionRunId });
@@ -102,11 +119,13 @@ app.post("/tasks", async (c) => {
 app.post("/approvals/:callId", async (c) => {
   const body = z.object({ sessionId: z.string().uuid(), mode: z.enum(["once", "widen", "deny"]) }).parse(await c.req.json());
   await approve(temporal, body.sessionId, c.req.param("callId"), body.mode);
-  parked.delete(c.req.param("callId"));
+  await upsertSessionNode(db, body.sessionId, "", { state: "running", parkedCallId: null, parkedGap: null });
   await recordDecision(db, { sessionId: body.sessionId, tool: "approval", argsHash: c.req.param("callId"), decision: body.mode === "deny" ? "deny" : "allow", decidedBy: "you:ui" });
   return c.json({ ok: true });
 });
 app.post("/sessions/:id/cancel", async (c) => { await cancel(temporal, c.req.param("id"), "cancelled from UI"); return c.json({ ok: true }); });
+
+app.route("/", graphRoutes(db));
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 

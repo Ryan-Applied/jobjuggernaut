@@ -11,6 +11,9 @@
   "dependencies": {
     "@jj/core": "workspace:*",
     "@jj/graph": "workspace:*",
+    "@jj/indexer": "workspace:^",
+    "@jj/workflows": "workspace:^",
+    "@temporalio/worker": "^1.11.5",
     "drizzle-orm": "^0.36.4"
   }
 }

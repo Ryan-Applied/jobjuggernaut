@@ -35,7 +35,7 @@ export class MockRunner implements Runner {
         if (d.startsWith("slow:")) await sleep(Number(d.slice(5)));
         else if (d === "fail") { push(l.emit({ type: "error", code: "mock_fail", message: "asked to fail", retryable: false })); end(); return; }
         else if (d.startsWith("tool:")) {
-          const tool = d.slice(5); const callId = `call-${l.queue.length}`;
+          const tool = d.slice(5); const callId = `${spec.sessionId.slice(0, 8)}-call-${l.queue.length}`;
           const res = await ctx.checkPolicy({ sessionId: spec.sessionId, tool, args: { cmd: "ls" }, resource: {} });
           push(l.emit({ type: "tool_call", callId, tool, args: { cmd: "ls" }, policyDecision: res.decision, grantId: res.grantId }));
           let ok = res.decision === "allow";

@@ -1,5 +1,5 @@
 import { Connection, Client } from "@temporalio/client";
-import { TaskWorkflow, SessionWorkflow } from "./workflows.js";
+import { TaskWorkflow, SessionWorkflow, IndexWorkflow, NightlyLearnWorkflow } from "./workflows.js";
 import { CLOUD_QUEUE, type TaskDefinition, approveSignal, cancelSignal, statusQuery } from "./shared.js";
 
 export async function temporalClient() {
@@ -20,4 +20,4 @@ export async function cancel(client: Client, sessionId: string, reason: string) 
 export async function status(client: Client, sessionId: string) {
   return client.workflow.getHandle(`session-${sessionId}`).query(statusQuery);
 }
-export { SessionWorkflow, TaskWorkflow };
+export { SessionWorkflow, TaskWorkflow, IndexWorkflow, NightlyLearnWorkflow };
