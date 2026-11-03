@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
-const sql = postgres(process.env.DATABASE_URL ?? "postgres://jj:jj@localhost:5432/jj", { max: 1 });
+const sql = postgres(process.env.DATABASE_URL ?? "postgres://jj:jj@localhost:5432/jj", { max: 1, onnotice: () => {} });
 
 await sql`create table if not exists _migrations (name text primary key, applied_at timestamptz default now())`;
 for (const f of readdirSync(dir).filter((n) => n.endsWith(".sql")).sort()) {

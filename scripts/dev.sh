@@ -18,15 +18,13 @@ pnpm -r --filter './packages/**' build
 set -a; source .env; set +a
 pnpm db:migrate
 
-ENV='unset npm_config_prefix; set -a; source .env; set +a;'
-tmux new-session -d -s "$SESSION" -n stack -c "$PWD"
-tmux send-keys -t "$SESSION:stack.0" "$ENV pnpm dev:workflows" C-m
-tmux split-window -h -t "$SESSION:stack" -c "$PWD"
-tmux send-keys -t "$SESSION:stack.1" "$ENV JJ_MOCK_RUNNER=${JJ_MOCK_RUNNER:-0} sleep 3; pnpm dev:runner" C-m
-tmux split-window -v -t "$SESSION:stack.0" -c "$PWD"
-tmux send-keys -t "$SESSION:stack.2" "$ENV pnpm dev:api" C-m
-tmux split-window -v -t "$SESSION:stack.1" -c "$PWD"
-tmux send-keys -t "$SESSION:stack.3" "$ENV sleep 4; pnpm dev:web" C-m
+pane() {  # pane <cmd>: run cmd in a fresh zsh with npm_config_prefix removed, keep the shell open afterwards
+  echo "env -u npm_config_prefix zsh -ic 'set -a; source .env; set +a; $1; exec zsh'"
+}
+tmux new-session -d -s "$SESSION" -n stack -c "$PWD" "$(pane 'pnpm dev:workflows')"
+tmux split-window -h -t "$SESSION:stack" -c "$PWD" "$(pane 'sleep 3; pnpm dev:runner')"
+tmux split-window -v -t "$SESSION:stack.0" -c "$PWD" "$(pane 'pnpm dev:api')"
+tmux split-window -v -t "$SESSION:stack.1" -c "$PWD" "$(pane 'sleep 4; pnpm dev:web')"
 tmux select-layout -t "$SESSION:stack" tiled
 tmux select-pane -t "$SESSION:stack.1"
 echo "web http://localhost:3000  api http://localhost:4000  temporal http://localhost:8233"
