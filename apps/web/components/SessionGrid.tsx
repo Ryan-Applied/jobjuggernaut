@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { API, getSessions, approve, cancelSession, startTask, type SessionRow } from "@/lib/api";
+import { API, getSessions, approve, cancelSession, startTask, get, type SessionRow } from "@/lib/api";
+import { Timeline } from "@/components/Timeline";
 
 const vendorPill: Record<string, string> = {
   claude: "bg-blue/10 text-blue", openai: "bg-green/10 text-green", gemini: "bg-amber/10 text-amber",
@@ -59,6 +60,7 @@ export function SessionGrid() {
         </div>
       </header>
       <div className="p-6 flex flex-col gap-5">
+        <Timeline />
         <div className="grid grid-cols-5 gap-3">
           <Stat label="Running" value={count("running")} />
           <Stat label="Parked, needs you" value={count("parked")} accent />
@@ -90,6 +92,7 @@ function SessionCard({ s, onChange }: { s: SessionRow; onChange: () => void }) {
         <span className="ml-auto font-mono text-xs text-muted">{p.runnerId ?? ""}</span>
       </div>
       <div className="font-semibold leading-tight">{s.title || "Session"}</div>
+      <div className="text-[13px] text-ink-2 flex gap-3">{p.projectId && <a href={`/projects/${p.projectId}`} className="font-semibold">project</a>}{p.mode && <span>{p.mode}</span>}{p.stepIndex != null && <span>step {Number(p.stepIndex) + 1}</span>}<a href={`/graph?node=${s.id}`} className="ml-auto text-red font-semibold">graph</a></div>
       <div className={`font-mono text-xs rounded px-2.5 py-2 ${parked ? "bg-red/10 text-red" : "bg-card-alt text-ink-2"}`}>{parked ? `approval_request  ${p.parkedGap}` : p.lastEvent ?? "waiting for first event"}</div>
       {parked && p.parkedCallId ? (
         <div className="flex gap-2">

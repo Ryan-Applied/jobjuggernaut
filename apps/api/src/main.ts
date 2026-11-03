@@ -143,6 +143,20 @@ app.post("/internal/materialise", async (c) => {
   return c.json({ def: { steps, title, mode, projectWorkdir: pj?.props?.workdir ?? def.projectWorkdir }, grantIds: ledger?.status === "signed" ? await signedGrantIdsForTask(db, taskId) : [] });
 });
 
+app.get("/audit", async (c) => {
+  const limit = Math.min(Number(c.req.query("limit") ?? 200), 1000);
+  const rows = await db.execute(sql`select a.id, a.ts, a.session_id, a.tool, a.args_hash, a.decision, a.grant_id, a.decided_by, a.payload, s.title as session_title, s.props->>'projectId' as project_id
+    from audit_log a left join nodes s on s.id = a.session_id order by a.id desc limit ${limit}`);
+  return c.json({ audit: rows });
+});
+app.get("/timeline", async (c) => {
+  const hours = Number(c.req.query("hours") ?? 18);
+  const since = new Date(Date.now() - hours * 3600_000).toISOString();
+  const rows = await db.execute(sql`select id, title, props, created_at from nodes where type = 'session' and (created_at > ${since}::timestamptz or props->>'state' in ('running','parked','starting')) order by created_at`);
+  const queued = await db.execute(sql`select id, title, props from nodes where type = 'task' and props->>'state' = 'queued' order by props->>'scheduledFor'`);
+  return c.json({ sessions: rows, queued });
+});
+
 app.get("/healthz", (c) => c.json({ ok: true }));
 
 function summary(e: SessionEvent): string {

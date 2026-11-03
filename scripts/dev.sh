@@ -14,6 +14,7 @@ command -v tmux >/dev/null || { echo "tmux missing: brew install tmux"; exit 1; 
 [[ -f .env ]] || { echo ".env missing: cp .env.example .env and set ANTHROPIC_API_KEY"; exit 1; }
 
 docker compose -f docker-compose.dev.yml up -d
+unset npm_config_prefix
 pnpm -r --filter './packages/**' build
 set -a; source .env; set +a
 pnpm db:migrate

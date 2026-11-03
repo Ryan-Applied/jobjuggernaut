@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import type { Db } from "@jj/graph";
 import { neighbourhood, similarSessions } from "@jj/graph";
+import { applySkillLessons } from "./skills.js";
 
 export const WorkflowDef = z.object({
   id: z.string().uuid().optional(),
@@ -94,9 +95,16 @@ export function graphRoutes(db: Db) {
       if (props.kind === "remove_grant") template = template.filter((g) => g.action !== props.tool);
       await db.execute(sql`update nodes set props = props || ${JSON.stringify({ grantTemplate: template, templateVersion: (wf?.props?.templateVersion ?? 1) + 1 })}::jsonb, updated_at = now() where id = ${props.workflowId}`);
       if (props.kind === "skill_edit") {
-        // Record the accepted lessons on the skill node; a PR to skills/ lands in Phase 4 once the repo path is configured.
-        const [skill] = (await db.execute(sql`select n.id, n.props from edges e join nodes n on n.id = e.dst where e.src = ${props.workflowId} and e.type = 'uses_skill' limit 1`)) as any[];
-        if (skill) await db.execute(sql`update nodes set props = props || ${JSON.stringify({ pendingLessons: [...(skill.props.pendingLessons ?? []), ...props.lessons] })}::jsonb where id = ${skill.id}`);
+        const [skill] = (await db.execute(sql`select n.id, n.title, n.props from edges e join nodes n on n.id = e.dst where e.src = ${props.workflowId} and e.type = 'uses_skill' limit 1`)) as any[];
+        if (skill) {
+          const version = (skill.props.version ?? 1) + 1;
+          const written = await applySkillLessons(skill.title, props.lessons ?? [], version).catch((e) => ({ path: String(e), committed: false }));
+          const newId = crypto.randomUUID();
+          await db.execute(sql`insert into nodes (id, type, title, props) values (${newId}, 'skill', ${skill.title}, ${JSON.stringify({ version, written })}::jsonb)`);
+          await db.execute(sql`insert into edges (src, dst, type) values (${skill.id}, ${newId}, 'superseded_by') on conflict do nothing`);
+          await db.execute(sql`update edges set dst = ${newId} where dst = ${skill.id} and type = 'uses_skill'`);
+          await db.execute(sql`update nodes set props = props || ${JSON.stringify({ written })}::jsonb where id = ${id}`);
+        }
       }
     }
     await db.execute(sql`update nodes set props = props || ${JSON.stringify({ status: decision === "accept" ? "accepted" : "rejected", decidedAt: new Date().toISOString() })}::jsonb where id = ${id}`);

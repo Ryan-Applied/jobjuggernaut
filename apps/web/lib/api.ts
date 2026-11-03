@@ -2,7 +2,7 @@ export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export interface SessionRow {
   id: string; title: string; created_at: string; updated_at: string;
-  props: { state?: string; vendor?: string; runnerId?: string; spendGbp?: number; tokensIn?: number; tokensOut?: number; lastEvent?: string; parkedCallId?: string; parkedGap?: string; outcome?: string; startedAt?: string; workflowId?: string };
+  props: { state?: string; vendor?: string; runnerId?: string; spendGbp?: number; tokensIn?: number; tokensOut?: number; lastEvent?: string; parkedCallId?: string; parkedGap?: string; outcome?: string; startedAt?: string; workflowId?: string; projectId?: string; mode?: string; stepIndex?: number; endedAt?: string };
 }
 
 export async function getSessions(): Promise<SessionRow[]> {
