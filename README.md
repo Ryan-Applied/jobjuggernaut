@@ -51,6 +51,12 @@ With no grants loaded, every tool call parks and shows Approve once / Deny in th
 - `pnpm test:integration` runs the Phase 1 exit test with the **mock runner** against a Temporal server on `TEMPORAL_ADDRESS`: 5 parallel sessions visible under 2 s, park → approve → resume, grant allow, approver deny, cancel mid-run, and runner-daemon restart mid-session. Do not run it while the dev stack is attached to the same Temporal server (they share queue names).
 - `pnpm dev:mock` runs the whole stack with the mock runner so the UI can be exercised with no vendor keys.
 
+## Deploying
+
+- **Always-on box** (Mac mini, small Linux host): `docker compose -f docker-compose.prod.yml up -d --build` runs Postgres, Temporal, the API, cloud worker, indexer and a runner; mount your project folders under `PROJECTS_ROOT`. Your laptop runs only `pnpm dev:runner` pointed at it.
+- **AWS**: `infra/terraform` builds the VPC, RDS Postgres 16 (run the migration to enable pgvector), ECS Fargate services from the multi-target `Dockerfile` (`--target api|cloud-worker|indexer`), a Tailscale subnet router, and an S3 Object Lock bucket for the audit mirror. Temporal Cloud is assumed; set `temporal_address`.
+- **Slack**: a bot with `chat:write`, interactivity URL `{API_URL}/slack/interactions`, and `SLACK_*` in the API's environment.
+
 ## Layout
 
 ```

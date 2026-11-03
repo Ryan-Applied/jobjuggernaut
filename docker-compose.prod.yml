@@ -1,0 +1,47 @@
+# Always-on box (Mac mini / small Linux host): cloud side + a runner, all on one machine.
+# For the real split (laptop runner + AWS cloud) use infra/terraform and run only the runner here.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: { POSTGRES_USER: jj, POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jj}, POSTGRES_DB: jj }
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    restart: unless-stopped
+  temporal:
+    image: temporalio/temporal:latest
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    user: "0:0"
+    volumes: ["temporaldata:/data"]
+    ports: ["8233:8233"]
+    restart: unless-stopped
+  migrate:
+    build: { context: ., target: base }
+    command: ["node", "packages/graph/dist/migrate.js"]
+    environment: { DATABASE_URL: postgres://jj:${POSTGRES_PASSWORD:-jj}@postgres:5432/jj }
+    depends_on: [postgres]
+  api:
+    build: { context: ., target: api }
+    env_file: .env
+    environment: { DATABASE_URL: postgres://jj:${POSTGRES_PASSWORD:-jj}@postgres:5432/jj, TEMPORAL_ADDRESS: temporal:7233 }
+    ports: ["4000:4000"]
+    depends_on: [migrate, temporal]
+    restart: unless-stopped
+  cloud-worker:
+    build: { context: ., target: cloud-worker }
+    env_file: .env
+    environment: { DATABASE_URL: postgres://jj:${POSTGRES_PASSWORD:-jj}@postgres:5432/jj, TEMPORAL_ADDRESS: temporal:7233, API_URL: http://api:4000 }
+    depends_on: [api]
+    restart: unless-stopped
+  indexer:
+    build: { context: ., target: indexer }
+    env_file: .env
+    environment: { DATABASE_URL: postgres://jj:${POSTGRES_PASSWORD:-jj}@postgres:5432/jj, TEMPORAL_ADDRESS: temporal:7233 }
+    depends_on: [api]
+    restart: unless-stopped
+  runner:
+    build: { context: ., target: runner-daemon }
+    env_file: .env
+    environment: { TEMPORAL_ADDRESS: temporal:7233, API_URL: http://api:4000, RUNNER_ID: always-on, WORKTREE_ROOT: /work/.worktrees }
+    volumes: ["${PROJECTS_ROOT:-./projects}:/work"]
+    depends_on: [api]
+    restart: unless-stopped
+volumes: { pgdata: {}, temporaldata: {} }

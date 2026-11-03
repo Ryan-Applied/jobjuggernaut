@@ -3,6 +3,14 @@ on: [push, pull_request]
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: jj, POSTGRES_PASSWORD: jj, POSTGRES_DB: jj }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U jj" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://jj:jj@localhost:5432/jj
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -12,6 +20,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm --filter @jj/policy test
+      - run: pnpm db:migrate
+      - run: pnpm --filter @jj/indexer test
       - name: Temporal dev server
         run: |
           curl -sL -o t.tgz https://github.com/temporalio/cli/releases/download/v1.3.0/temporal_cli_1.3.0_linux_amd64.tar.gz
