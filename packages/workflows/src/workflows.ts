@@ -53,7 +53,7 @@ function localFor(runnerId: string) {
     taskQueue: localQueue(runnerId),
     startToCloseTimeout: "4 hours",
     scheduleToStartTimeout: "2 minutes",
-    heartbeatTimeout: "30 seconds",
+    heartbeatTimeout: "90 seconds",
     retry: { maximumAttempts: 3, initialInterval: "2 seconds", nonRetryableErrorTypes: ["SESSION_NOT_LIVE"] },
   });
 }
