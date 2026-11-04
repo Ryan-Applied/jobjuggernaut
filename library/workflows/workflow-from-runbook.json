@@ -1,0 +1,110 @@
+{
+  "id": "workflow-from-runbook",
+  "title": "Workflow from runbook",
+  "description": "Turn a written procedure into a tested workflow definition with a dry-run ledger check.",
+  "steps": [
+    {
+      "name": "draft",
+      "prompt": "Read the runbook, SOP or notes you were given (file path or pasted text in the task). Draft a workflow definition as JSON matching WorkflowDef: 2 to 7 coarse steps, each with a prompt an agent can act on, connectors, intendedActions with scopes and caps, and a reviewer step. Save it to workflow.draft.json.",
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "dry-run",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. POST the draft to /workflows, create a task with scheduledFor tomorrow 22:00 via /projects/:id/continue or /tasks, then POST /ledgers/generate for it and read the ledger. Any action listed under neverPreAuthorised must be deliberately placed on a step that expects to park. Fix the draft and re-post until the ledger is what you intend. Write ledger.review.md explaining each grant.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 30
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 2
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "review",
+      "prompt": "Review workflow.draft.json and ledger.review.md: are the scopes tight, are the caps realistic, is anything outward missing a park? Report only.",
+      "preferredVendor": "gemini",
+      "reviewerOfPrevious": true,
+      "skills": [
+        "review-findings"
+      ],
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        }
+      ],
+      "maxCostGbp": 0.4,
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

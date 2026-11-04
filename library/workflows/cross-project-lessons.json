@@ -1,0 +1,85 @@
+{
+  "id": "cross-project-lessons",
+  "title": "Cross-project lessons",
+  "description": "Cluster lessons across all projects and propose shared skills.",
+  "suggestedChore": {
+    "cron": "0 10 * * 5",
+    "mode": "auto",
+    "reason": "Weekly synthesis."
+  },
+  "steps": [
+    {
+      "name": "cluster",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. GET /sessions and collect props.lessons across all projects for the last 14 days, plus GET /proposals. Cluster lessons that say the same thing in different words. For each cluster with 3+ members across 2+ projects, write a candidate SKILL.md section (name, when to use, the rule) into LESSONS.md, citing the session ids as evidence.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 30
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "review",
+      "prompt": "Review LESSONS.md: are the clusters real or coincidental, and are the proposed rules specific enough to act on? Report only.",
+      "preferredVendor": "gemini",
+      "reviewerOfPrevious": true,
+      "skills": [
+        "review-findings"
+      ],
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        }
+      ],
+      "maxCostGbp": 0.3,
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

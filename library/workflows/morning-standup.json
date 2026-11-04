@@ -1,0 +1,90 @@
+{
+  "id": "morning-standup",
+  "title": "Morning standup",
+  "description": "What happened overnight, per project, with decisions needed first.",
+  "suggestedChore": {
+    "cron": "0 8 * * 1-5",
+    "mode": "auto",
+    "reason": "Ready when you sit down; posts to Slack only after you approve."
+  },
+  "steps": [
+    {
+      "name": "collect",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. GET /brief?hours=14 and GET /projects. For each project with activity: last session outcome, cost, parked items with the gap text, assist go-aheads waiting, progress headline and next step. Write STANDUP.md: decisions needed first (parked, go-aheads, unsigned ledgers), then per-project status in two lines each, then spend vs cap and grants used vs unused.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "post",
+      "prompt": "Post STANDUP.md as a Slack message to the standup channel configured for this project (ask by parking if you do not know it).",
+      "intendedActions": [
+        {
+          "tool": "slack.post",
+          "scope": {
+            "channel": "#jj-standup"
+          },
+          "cap": {
+            "count": 1
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 0.3,
+      "skills": [],
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

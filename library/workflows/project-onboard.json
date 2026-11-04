@@ -1,0 +1,140 @@
+{
+  "id": "project-onboard",
+  "title": "Project onboard",
+  "description": "Make a repo or folder ready for autonomous sessions: CLAUDE.md, test command, epics, a sane grant template.",
+  "steps": [
+    {
+      "name": "inspect",
+      "prompt": "You are onboarding this folder into the control plane. Read README, docs, manifests and the last 30 commits. Produce ONBOARDING.md in the folder with: what this project is, how to build and test it (exact commands, verified by running them), the integration branch, and the five most valuable open items with file references.",
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 80
+          }
+        },
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 2
+          }
+        }
+      ],
+      "maxCostGbp": 2,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "claude-md",
+      "prompt": "If CLAUDE.md is missing or thin, write one: build and test commands, code style rules evident from the codebase, what never to touch, how to name branches (jj/<topic>) and commit messages. Keep it under 80 lines. Do not push.",
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 30
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        },
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "register",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. Create or update the project for this folder: title, goal from ONBOARDING.md, defaultMode assist, continueSteps of orient/implement/review, and a grant template limited to Read, Glob, Grep and the test command. Then print the project id.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "review",
+      "prompt": "Review ONBOARDING.md and CLAUDE.md for accuracy against the code. List anything that is wrong or unverified. Do not edit.",
+      "preferredVendor": "gemini",
+      "reviewerOfPrevious": true,
+      "skills": [
+        "review-findings"
+      ],
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 60
+          }
+        }
+      ],
+      "maxCostGbp": 0.5,
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "id": "grant-template-tune",
+  "title": "Grant template tune",
+  "description": "Turn the last week's parks and unused grants into template proposals.",
+  "suggestedChore": {
+    "cron": "30 8 * * 1",
+    "mode": "auto",
+    "reason": "Weekly, before you sign Monday's ledgers."
+  },
+  "steps": [
+    {
+      "name": "analyse",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. GET /audit?limit=1000 and GET /ledgers?status=signed. Per project and workflow: actions that parked 3+ times and were approved (candidates to add, with the tightest scope that would have covered them), grants with zero use over 5+ runs (candidates to remove), caps hit (candidates to raise with evidence). Write GRANTS.md with a table and the exact JSON edits per workflow.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "propose",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. For each recommendation in GRANTS.md create a proposal node via POST /proposals is not available; instead POST /workflows with the updated grantTemplate ONLY for workflows where the change is a removal or a scope tightening. For additions, leave the recommendation in GRANTS.md for the operator to accept on the Workflow page. Print what you changed.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 2
+          }
+        }
+      ],
+      "maxCostGbp": 0.8,
+      "skills": [],
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}
