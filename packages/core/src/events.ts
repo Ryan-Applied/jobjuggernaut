@@ -25,6 +25,10 @@ export const SessionEvent = z.discriminatedUnion("type", [
     type: z.literal("message"),
     role: z.enum(["user", "assistant", "system"]),
     text: z.string(),
+    /** Streaming delta of an in-progress assistant turn (B8). Not persisted as a turn. */
+    partial: z.boolean().optional(),
+    /** Set when the message belongs to a sub-agent (C4). */
+    subagentId: z.string().optional(),
     tokensIn: z.number().int().nonnegative().default(0),
     tokensOut: z.number().int().nonnegative().default(0),
   }),
@@ -35,6 +39,7 @@ export const SessionEvent = z.discriminatedUnion("type", [
     args: z.record(z.unknown()),
     policyDecision: PolicyDecision,
     grantId: z.string().uuid().optional(),
+    subagentId: z.string().optional(),
   }),
   base.extend({
     type: z.literal("tool_result"),

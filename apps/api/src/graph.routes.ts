@@ -14,6 +14,8 @@ export const WorkflowDef = z.object({
     skills: z.array(z.string()).default([]), connectors: z.array(z.string()).default([]),
     preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(),
     maxCostGbp: z.number().positive().default(2),
+    after: z.array(z.string()).optional(), retry: z.number().int().min(0).max(5).optional(), onFailure: z.string().optional(),
+    interactive: z.boolean().optional(), idleMinutes: z.number().int().positive().optional(), requires: z.array(z.string()).optional(),
     /** What the planner will put in the ledger for this step. */
     intendedActions: z.array(z.object({ tool: z.string(), scope: z.record(z.union([z.string(), z.array(z.string())])).default({}), cap: z.object({ count: z.number().int().positive().optional(), gbp: z.number().positive().optional() }).default({}) })).default([]),
   })).min(1),

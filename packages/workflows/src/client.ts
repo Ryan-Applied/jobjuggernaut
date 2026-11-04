@@ -1,6 +1,6 @@
 import { Connection, Client } from "@temporalio/client";
 import { TaskWorkflow, SessionWorkflow, IndexWorkflow, NightlyLearnWorkflow, OvernightBatchWorkflow, ChoreRunWorkflow, ProgressWorkflow, IngestProjectWorkflow, IngestWorkflowWorkflow } from "./workflows.js";
-import { CLOUD_QUEUE, type TaskDefinition, approveSignal, cancelSignal, continueSignal, ledgerSignedSignal, statusQuery, taskStatusQuery, batchStatusQuery } from "./shared.js";
+import { CLOUD_QUEUE, type TaskDefinition, approveSignal, cancelSignal, continueSignal, pauseSignal, nudgeSignal, ledgerSignedSignal, statusQuery, taskStatusQuery, batchStatusQuery } from "./shared.js";
 
 export async function temporalClient() {
   const connection = await Connection.connect({ address: process.env.TEMPORAL_ADDRESS ?? "localhost:7233" });
@@ -16,6 +16,12 @@ export async function approve(client: Client, sessionId: string, callId: string,
 }
 export async function goAhead(client: Client, taskId: string, stepIndex: number, go: boolean) {
   await client.workflow.getHandle(`task-${taskId}`).signal(continueSignal, stepIndex, go);
+}
+export async function pauseTask(client: Client, taskId: string, paused: boolean) {
+  await client.workflow.getHandle(`task-${taskId}`).signal(pauseSignal, paused);
+}
+export async function nudge(client: Client, sessionId: string, text: string, final?: boolean) {
+  await client.workflow.getHandle(`session-${sessionId}`).signal(nudgeSignal, text, final);
 }
 export async function taskStatus(client: Client, taskId: string) {
   return client.workflow.getHandle(`task-${taskId}`).query(taskStatusQuery);

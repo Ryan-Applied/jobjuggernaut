@@ -20,10 +20,13 @@ export function ProjectDetail({ id }: { id: string }) {
   const others = all.filter((s) => s.props.projectId !== id && s.props.outcome).slice(0, 8);
   return (
     <>
-      <Header title={p.title} sub={<span className="font-mono">{p.props.workdir ?? "scratch"}</span>}><Btn onClick={() => post(`/projects/${id}/assess`).then(load)}>Reassess progress</Btn><Btn onClick={edit}>Edit</Btn><Btn href="/today">Today</Btn></Header>
+      <Header title={p.title} sub={<span className="font-mono">{p.props.workdir ?? "scratch"}</span>}><Btn onClick={() => post(`/projects/${id}/${p.props.paused ? "unpause" : "pause"}`).then(load)}>{p.props.paused ? "Resume project" : "Pause project"}</Btn><Btn onClick={() => post(`/projects/${id}/assess`).then(load)}>Reassess progress</Btn><Btn onClick={edit}>Edit</Btn><Btn href="/today">Today</Btn></Header>
       <div className="p-6 grid grid-cols-[2fr_1fr] gap-5 items-start">
         <div className="flex flex-col gap-4">
+          {p.props.paused && <Card accent="red"><div className="text-[14px] font-semibold">Paused. Continues are refused and chores are paused.</div></Card>}
           {p.props.goal && <Card><Eyebrow>Goal</Eyebrow><div className="text-[14px]">{p.props.goal}</div></Card>}
+          {p.props.memory && (p.props.memory.decisions?.length || p.props.memory.conventions?.length || p.props.memory.openQuestions?.length) ? <Card><div className="flex items-center gap-2"><H2>Project memory</H2><span className="ml-auto text-xs text-muted">maintained by the assessor; included in every continuation pack</span></div>
+            <div className="grid grid-cols-3 gap-4 text-[13px]"><div><Eyebrow>Decisions</Eyebrow>{p.props.memory.decisions.map((x: string, i: number) => <div key={i} className="text-ink-2">{x}</div>)}</div><div><Eyebrow>Conventions</Eyebrow>{p.props.memory.conventions.map((x: string, i: number) => <div key={i} className="text-ink-2">{x}</div>)}</div><div><Eyebrow>Open questions</Eyebrow>{p.props.memory.openQuestions.map((x: string, i: number) => <div key={i} className="text-amber">{x}</div>)}</div></div></Card> : null}
           {p.props.progress && (() => { const pr = p.props.progress; return (
             <Card accent={pr.status === "blocked" ? "red" : pr.status === "on_track" ? "green" : undefined}>
               <div className="flex items-center gap-2"><H2>Progress</H2><Pill tone={pr.status === "on_track" ? "green" : pr.status === "blocked" ? "red" : pr.status === "at_risk" ? "amber" : "grey"}>{pr.status.replace("_", " ")}{pr.percent != null ? ` ${pr.percent}%` : ""}</Pill><span className="ml-auto text-xs text-muted">{pr.assessedAt ? new Date(pr.assessedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span></div>
@@ -43,6 +46,7 @@ export function ProjectDetail({ id }: { id: string }) {
             {d.sessions.length === 0 && <div className="text-[13px] text-ink-2">None yet.</div>}
           </Card>
           <Card><H2>Tasks</H2>{d.tasks.map((t: any) => <div key={t.id} className="flex items-center gap-2 text-[13px] border-t border-black/10 py-1.5 first:border-0"><span className="font-semibold">{t.title}</span><Pill tone={t.props.state === "awaiting_go_ahead" ? "amber" : t.props.state === "done" ? "green" : "grey"}>{t.props.state}</Pill><span className="text-muted">{t.props.mode}</span>{t.props.scheduledFor && <span className="text-muted">tonight {new Date(t.props.scheduledFor).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>}
+            {(t.props.state === "running" || t.props.state === "paused") && <span className="ml-auto"><Btn onClick={() => post(`/tasks/${t.id}/${t.props.state === "paused" ? "resume" : "pause"}`).then(load)}>{t.props.state === "paused" ? "Resume" : "Pause"}</Btn></span>}
             {t.props.state === "awaiting_go_ahead" && <span className="ml-auto flex gap-1.5"><Btn primary onClick={() => post(`/tasks/${t.id}/go`, { stepIndex: t.props.stepIndex, go: true }).then(load)}>Go: {t.props.stepName}</Btn><Btn onClick={() => post(`/tasks/${t.id}/go`, { stepIndex: t.props.stepIndex, go: false }).then(load)}>Stop</Btn></span>}</div>)}{d.tasks.length === 0 && <div className="text-[13px] text-ink-2">None yet.</div>}</Card>
         </div>
         <div className="flex flex-col gap-4">

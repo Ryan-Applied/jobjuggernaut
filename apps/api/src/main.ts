@@ -6,7 +6,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { SessionEvent, Grant } from "@jj/core";
 import { createDb, appendEvents, recordDecision, upsertSessionNode, neighbourhood, similarSessions } from "@jj/graph";
-import { temporalClient, startTask, approve, cancel, status, type TaskDefinition } from "@jj/workflows";
+import { temporalClient, startTask, approve, cancel, status, nudge, pauseTask, type TaskDefinition } from "@jj/workflows";
 import { EventBus } from "./bus.js";
 import { graphRoutes } from "./graph.routes.js";
 import { projectRoutes } from "./projects.routes.js";
@@ -102,8 +102,9 @@ app.get("/events", (c) => {
 // --- commands ------------------------------------------------------------------
 const StartTask = z.object({
   title: z.string().optional(), workflowId: z.string().uuid(), runnerId: z.string().default(process.env.DEFAULT_RUNNER_ID ?? "laptop"), grantIds: z.array(z.string().uuid()).default([]),
-  steps: z.array(z.object({ name: z.string(), prompt: z.string(), skills: z.array(z.string()).optional(), connectors: z.array(z.string()).optional(), requires: z.array(z.string()).optional(), preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(), maxCostGbp: z.number().positive() })).min(1).optional(),
+  steps: z.array(z.object({ name: z.string(), prompt: z.string(), skills: z.array(z.string()).optional(), connectors: z.array(z.string()).optional(), requires: z.array(z.string()).optional(), preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(), maxCostGbp: z.number().positive(), after: z.array(z.string()).optional(), retry: z.number().int().min(0).max(5).optional(), onFailure: z.string().optional(), interactive: z.boolean().optional(), idleMinutes: z.number().int().positive().optional() })).min(1).optional(),
   scheduledFor: z.string().datetime().optional(),   // set => queued for the overnight batch instead of starting now
+  priority: z.number().int().optional(), runnerAffinity: z.enum(["fixed", "any"]).optional(), budgetGbp: z.number().positive().optional(), deadline: z.string().datetime().optional(),
 });
 app.post("/tasks", async (c) => {
   const body = StartTask.parse(await c.req.json());
@@ -111,9 +112,9 @@ app.post("/tasks", async (c) => {
   const steps = body.steps ?? wf?.props?.steps;
   if (!steps?.length) return c.json({ error: "no steps: pass steps or a workflowId with a definition" }, 400);
   const title = body.title ?? wf?.title ?? "Task";
-  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? "laptop", grantIds: body.grantIds, steps };
+  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? "laptop", grantIds: body.grantIds, steps, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline };
   if (body.scheduledFor) {
-    await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: body.workflowId, scheduledFor: body.scheduledFor, state: "queued" })}::jsonb)`);
+    await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: body.workflowId, scheduledFor: body.scheduledFor, state: "queued", priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline })}::jsonb)`);
     return c.json({ taskId: def.taskId, queued: true });
   }
   await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${def.title}, ${JSON.stringify({ steps: def.steps.length, runnerId: def.runnerId, workflowId: def.workflowId, state: "started" })}::jsonb) on conflict do nothing`);
@@ -122,6 +123,30 @@ app.post("/tasks", async (c) => {
   return c.json({ taskId: def.taskId, workflowRunId: h.firstExecutionRunId });
 });
 app.post("/sessions/:id/cancel", async (c) => { await cancel(temporal, c.req.param("id"), "cancelled from UI"); return c.json({ ok: true }); });
+// B1: follow-up into an interactive session
+app.post("/sessions/:id/send", async (c) => {
+  const body = z.object({ text: z.string().min(1), final: z.boolean().optional() }).parse(await c.req.json());
+  await nudge(temporal, c.req.param("id"), body.text, body.final);
+  return c.json({ ok: true });
+});
+// daemon-side notes on a session (workdir, branch, worktree outcome)
+app.post("/sessions/:id/note", auth, async (c) => { await upsertSessionNode(db, c.req.param("id"), "", await c.req.json()); return c.json({ ok: true }); });
+// B3: runner registry
+app.post("/runners/heartbeat", auth, async (c) => {
+  const info = await c.req.json();
+  const [r] = (await db.execute(sql`select id from nodes where type = 'runner' and title = ${info.runnerId}`)) as any[];
+  const id = r?.id ?? crypto.randomUUID();
+  await db.execute(sql`insert into nodes (id, type, title, props) values (${id}, 'runner', ${info.runnerId}, ${JSON.stringify({ ...info, lastSeen: new Date().toISOString() })}::jsonb)
+    on conflict (id) do update set props = nodes.props || excluded.props, updated_at = now()`);
+  return c.json({ ok: true });
+});
+app.get("/runners", async (c) => {
+  const rows = (await db.execute(sql`select id, title, props from nodes where type = 'runner' order by title`)) as any[];
+  return c.json({ runners: rows.map((r) => ({ ...r, live: Date.now() - Date.parse(r.props.lastSeen ?? 0) < 120_000 })) });
+});
+// C5: pause/resume a task between waves
+app.post("/tasks/:id/pause", async (c) => { await pauseTask(temporal, c.req.param("id"), true); return c.json({ ok: true }); });
+app.post("/tasks/:id/resume", async (c) => { await pauseTask(temporal, c.req.param("id"), false); return c.json({ ok: true }); });
 
 app.route("/", graphRoutes(db));
 app.route("/", projectRoutes(db, temporal));

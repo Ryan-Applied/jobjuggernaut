@@ -13,7 +13,7 @@ const run = promisify(execFile);
 
 export const SKILLS_DIR = process.env.SKILLS_DIR ?? resolve(process.cwd(), "../../skills");
 
-export async function applySkillLessons(skillId: string, lessons: string[], version: number): Promise<{ path: string; branch?: string; committed: boolean }> {
+export async function applySkillLessons(skillId: string, lessons: string[], version: number): Promise<{ path: string; branch?: string; committed: boolean; prUrl?: string }> {
   const path = resolve(SKILLS_DIR, skillId, "SKILL.md");
   await mkdir(dirname(path), { recursive: true });
   let body = await readFile(path, "utf8").catch(() => `---\nname: ${skillId}\ndescription: ${skillId}\n---\n\n`);
@@ -29,7 +29,13 @@ export async function applySkillLessons(skillId: string, lessons: string[], vers
     await g("checkout", "-B", branch);
     await g("add", path);
     await g("-c", "user.email=jobjuggernaut@local", "-c", "user.name=jobjuggernaut", "commit", "-m", `skill(${skillId}): v${version} lessons from the nightly learn pass`);
-    return { path, branch, committed: true };
+    let prUrl: string | undefined;
+    if (process.env.SKILLS_PR === "1") {
+      await g("push", "-u", "origin", branch).catch(() => undefined);
+      const body = `Lessons folded into ${skillId} v${version}:\n\n` + lessons.map((l) => `- ${l}`).join("\n");
+      prUrl = await run("gh", ["pr", "create", "--head", branch, "--title", `skill(${skillId}): v${version}`, "--body", body], { cwd: repo }).then((r) => r.stdout.trim().split("\n").pop()).catch(() => undefined);
+    }
+    return { path, branch, committed: true, prUrl };
   } finally { await g("checkout", current).catch(() => undefined); }
 }
 

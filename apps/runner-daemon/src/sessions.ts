@@ -10,6 +10,9 @@ import { OpenAIRunner } from "@jj/runner-openai";
 interface Live {
   runner: Runner;
   handle: SessionHandle;
+  spec: SessionSpec;
+  workdir: string;
+  branch?: string;
   buffer: SessionEvent[];
   iterator: AsyncIterator<SessionEvent>;
   parked?: { callId: string; resolve: (ok: boolean) => void };
@@ -33,11 +36,18 @@ export class SessionManager {
         });
   }
 
+  /** B3: vendor preference, else first vendor that is not avoided and has the required tools. */
   pick(spec: SessionSpec): Runner {
-    const v = spec.preferredVendor ?? (spec.reviewerOf ? "gemini" : "claude");
-    const r = this.runners[v];
-    if (!r) throw new Error(`no runner for vendor ${v}`);
-    return r;
+    if (spec.preferredVendor && this.runners[spec.preferredVendor]) return this.runners[spec.preferredVendor];
+    const order = spec.reviewerOf ? ["gemini", "openai", "claude"] : ["claude", "openai", "gemini"];
+    for (const v of order) {
+      const r = this.runners[v]; if (!r) continue;
+      if (spec.avoidVendor && v === spec.avoidVendor) continue;
+      return r;
+    }
+    const any = Object.values(this.runners)[0];
+    if (!any) throw new Error("no runners configured");
+    return any;
   }
 
   async loadGrants(sessionId: string, grantIds: string[]) {
@@ -47,7 +57,7 @@ export class SessionManager {
 
   async start(spec: SessionSpec) {
     await this.loadGrants(spec.sessionId, spec.grantIds);
-    const { dir: workdir, isolation } = await this.worktrees.prepare(spec.sessionId, spec.projectWorkdir, spec.isolation);
+    const { dir: workdir, isolation, branch } = await this.worktrees.prepare(spec.sessionId, spec.projectWorkdir, spec.isolation);
     const runner = this.pick(spec);
     const prompt = spec.context ? `${spec.context}\n\n---\n\n# Task\n${spec.prompt}` : spec.prompt;
     const ctx: RunnerContext = {
@@ -62,7 +72,9 @@ export class SessionManager {
     };
     const handle = await runner.start({ ...spec, workdir, prompt, isolation: isolation as any }, ctx);
     const iterator = runner.stream(handle)[Symbol.asyncIterator]();
-    this.live.set(spec.sessionId, { runner, handle, buffer: [], iterator, spendGbp: 0, ended: false });
+    this.live.set(spec.sessionId, { runner, handle, spec, workdir, branch, buffer: [], iterator, spendGbp: 0, ended: false });
+    await this.api.postEvents([]).catch(() => undefined);
+    await this.api.note(spec.sessionId, { workdir, branch, isolation }).catch(() => undefined);
     return handle;
   }
 
@@ -97,12 +109,19 @@ export class SessionManager {
       while (true) {
         if (signal?.aborted) throw aborted();
         const { value, done } = await next();
-        if (done) { await flush(); l.ended = true; return { lastSeq, ended: true, spendGbp: l.spendGbp, outcome: l.outcome ?? "complete" }; }
+        if (done) {
+          await flush(); l.ended = true;
+          const rel = await this.worktrees.release(sessionId, l.spec.projectWorkdir, l.outcome ?? "complete").catch((e) => ({ kept: true, reason: String(e) }));
+          await this.api.note(sessionId, { worktree: rel }).catch(() => undefined);
+          this.live.delete(sessionId);
+          return { lastSeq, ended: true, spendGbp: l.spendGbp, outcome: l.outcome ?? "complete" };
+        }
         const e = value as SessionEvent;
         if (e.seq < fromSeq) continue;
         lastSeq = e.seq; batch.push(e); schedule();
         if (e.type === "cost") l.spendGbp = e.cumulativeGbp;
         if (e.type === "done") l.outcome = e.outcome;
+        if (e.type === "error") l.outcome = "error";
         if (batch.length >= 20) await flush();
         heartbeat(lastSeq);
         if (e.type === "approval_request") {
@@ -120,6 +139,18 @@ export class SessionManager {
   }
 
   inspect(workdir: string) { return this.worktrees.inspect(workdir); }
+
+  async send(sessionId: string, text: string, final?: boolean) {
+    const l = this.live.get(sessionId);
+    if (!l) { const e: any = new Error(`SESSION_NOT_LIVE ${sessionId}`); e.code = "SESSION_NOT_LIVE"; throw e; }
+    await l.runner.send(l.handle, { text, final });
+  }
+
+  /** B3: what this host can do, for the registry. */
+  async registry() {
+    const caps = await Promise.all(Object.values(this.runners).map((r) => r.capabilities()));
+    return { runnerId: this.runnerId, vendors: caps.map((c) => c.vendor), tools: [...new Set(caps.flatMap((c) => c.tools))], host: process.platform, hasChrome: process.platform === "darwin", live: this.live.size };
+  }
 
   async cancel(sessionId: string, reason: string) {
     const l = this.live.get(sessionId);

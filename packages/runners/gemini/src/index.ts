@@ -8,11 +8,14 @@
  * hook mechanism lands when the Phase 2 reviewer needs to write.
  */
 import { spawn } from "node:child_process";
+import { parseLine } from "./parse.js";
 import { createInterface } from "node:readline";
-import { eventFactory, type Runner, type RunnerContext, type SessionHandle, type SessionSpec, type SessionEvent, type SessionInput, type RunnerCapabilities } from "@jj/core";
+import { eventFactory, artifactsFor, costGbp, type Runner, type RunnerContext, type SessionHandle, type SessionSpec, type SessionEvent, type SessionInput, type RunnerCapabilities } from "@jj/core";
 
 const READ_ONLY = new Set(["read_file", "list_directory", "glob", "grep", "search_file_content", "web_fetch", "google_web_search"]);
-const COST = { inputPer1k: 0.001, outputPer1k: 0.008 };
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
+const COST = { inputPer1k: costGbp(MODEL, 1000, 0), outputPer1k: costGbp(MODEL, 0, 1000) };
+export { parseLine } from "./parse.js";
 
 interface Live { queue: SessionEvent[]; waiters: Array<() => void>; ended: boolean; proc?: ReturnType<typeof spawn>; emit: ReturnType<typeof eventFactory> }
 
@@ -36,23 +39,22 @@ export class GeminiRunner implements Runner {
     l.proc = proc;
     let tokensIn = 0, tokensOut = 0, cumulative = 0;
 
+    const pending = new Map<string, { tool: string; args: Record<string, unknown> }>();
     createInterface({ input: proc.stdout! }).on("line", async (line) => {
-      let m: any; try { m = JSON.parse(line); } catch { return; }
-      if (m.type === "assistant" || m.type === "message") {
-        const text = m.content ?? m.text ?? "";
-        push(l.emit({ type: "message", role: "assistant", text, raw: m }));
-      } else if (m.type === "tool_call" || m.type === "tool_use") {
-        const tool = m.name ?? m.tool ?? "unknown"; const args = m.args ?? m.input ?? {}; const callId = m.id ?? crypto.randomUUID();
-        const res = READ_ONLY.has(tool)
-          ? await ctx.checkPolicy({ sessionId: spec.sessionId, tool, args, resource: {} })
-          : { decision: "deny" as const, reason: "gemini reviewer is read-only" };
-        push(l.emit({ type: "tool_call", callId, tool, args, policyDecision: res.decision, grantId: (res as any).grantId }));
-      } else if (m.type === "tool_result") {
-        push(l.emit({ type: "tool_result", callId: m.id ?? "", ok: !m.error, summary: String(m.output ?? m.error ?? "").slice(0, 160), raw: m }));
-      } else if (m.type === "usage" || m.usage) {
-        const u = m.usage ?? m; tokensIn += u.input_tokens ?? u.promptTokens ?? 0; tokensOut += u.output_tokens ?? u.candidatesTokens ?? 0;
-        const costGbp = (tokensIn / 1000) * COST.inputPer1k + (tokensOut / 1000) * COST.outputPer1k; cumulative = costGbp;
-        push(l.emit({ type: "cost", tokensIn, tokensOut, costGbp, cumulativeGbp: cumulative }));
+      for (const p of parseLine(line)) {
+        if (p.kind === "text") push(l.emit({ type: "message", role: "assistant", text: p.text, raw: p.raw }));
+        else if (p.kind === "tool_call") {
+          const res = READ_ONLY.has(p.tool) ? await ctx.checkPolicy({ sessionId: spec.sessionId, tool: p.tool, args: p.args, resource: {} }) : { decision: "deny" as const, reason: "gemini reviewer is read-only" };
+          pending.set(p.callId, { tool: p.tool, args: p.args });
+          push(l.emit({ type: "tool_call", callId: p.callId, tool: p.tool, args: p.args, policyDecision: res.decision, grantId: (res as any).grantId }));
+        } else if (p.kind === "tool_result") {
+          push(l.emit({ type: "tool_result", callId: p.callId, ok: p.ok, summary: p.text.slice(0, 160), raw: p.raw }));
+          const c = pending.get(p.callId); pending.delete(p.callId);
+          if (c && p.ok) for (const a of artifactsFor(c.tool, c.args, p.text, spec.workdir)) push(l.emit({ type: "artifact", ...a }));
+        } else if (p.kind === "usage") {
+          tokensIn += p.tokensIn; tokensOut += p.tokensOut; cumulative = (tokensIn / 1000) * COST.inputPer1k + (tokensOut / 1000) * COST.outputPer1k;
+          push(l.emit({ type: "cost", tokensIn, tokensOut, costGbp: cumulative, cumulativeGbp: cumulative }));
+        }
       }
     });
     proc.stderr?.on("data", (d) => push(l.emit({ type: "message", role: "system", text: String(d).trim(), raw: { stderr: true } })));

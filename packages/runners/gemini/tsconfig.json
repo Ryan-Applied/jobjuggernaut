@@ -1,1 +1,1 @@
-{ "extends": "../../../tsconfig.base.json", "compilerOptions": { "composite": true, "outDir": "dist", "rootDir": "src" }, "include": ["src"], "references": [{ "path": "../../core" }] }
+{ "extends": "../../../tsconfig.base.json", "compilerOptions": { "composite": true, "outDir": "dist", "rootDir": "src" }, "include": ["src"], "exclude": ["src/**/*.test.ts"], "references": [{ "path": "../../core" }] }

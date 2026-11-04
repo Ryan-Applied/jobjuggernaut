@@ -6,5 +6,6 @@
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "scripts": { "build": "tsc -b tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@jj/core": "workspace:*" }
+  "dependencies": { "@jj/core": "workspace:*" },
+  "devDependencies": { "vitest": "^2.1.8" }
 }
