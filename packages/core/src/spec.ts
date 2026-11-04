@@ -50,3 +50,53 @@ export type RunnerCapabilities = z.infer<typeof RunnerCapabilities>;
 
 export const SessionInput = z.object({ text: z.string() });
 export type SessionInput = z.infer<typeof SessionInput>;
+
+// ---- LLM-assisted ingestion and progress ---------------------------------------------
+const Scope = z.record(z.union([z.string(), z.array(z.string())]));
+const Cap = z.object({ count: z.number().int().positive().optional(), gbp: z.number().positive().optional() });
+export const IntendedAction = z.object({ tool: z.string(), scope: Scope.default({}), cap: Cap.default({}) });
+export const StepDraft = z.object({
+  name: z.string(), prompt: z.string(),
+  skills: z.array(z.string()).default([]), connectors: z.array(z.string()).default([]),
+  preferredVendor: Vendor.optional(), reviewerOfPrevious: z.boolean().optional(),
+  intendedActions: z.array(IntendedAction).default([]), maxCostGbp: z.number().positive().default(2),
+});
+export const ProjectDraft = z.object({
+  title: z.string(),
+  goal: z.string(),
+  summary: z.string(),                          // what the LLM understood the project to be
+  defaultMode: Mode.default("assist"),
+  continueSteps: z.array(StepDraft).min(1),
+  grantTemplate: z.array(z.object({ action: z.string(), scope: Scope.default({}), cap: Cap.default({}) })).default([]),
+  skills: z.array(z.string()).default([]),
+  connectors: z.array(z.string()).default([]),
+  suggestedChore: z.object({ cron: z.string(), mode: Mode, reason: z.string() }).optional(),
+  epics: z.array(z.object({ title: z.string(), status: z.enum(["todo", "in_progress", "done"]).default("todo"), notes: z.string().optional() })).default([]),
+  risks: z.array(z.string()).default([]),
+  evidence: z.array(z.string()).default([]),    // files/facts the draft was based on
+});
+export type ProjectDraft = z.infer<typeof ProjectDraft>;
+
+export const WorkflowDraft = z.object({
+  title: z.string(), description: z.string().optional(),
+  steps: z.array(StepDraft).min(1),
+  grantTemplate: z.array(z.object({ action: z.string(), scope: Scope.default({}), cap: Cap.default({}) })).default([]),
+  suggestedChore: z.object({ cron: z.string(), mode: Mode, reason: z.string() }).optional(),
+  evidence: z.array(z.string()).default([]),
+});
+export type WorkflowDraft = z.infer<typeof WorkflowDraft>;
+
+export const ProgressAssessment = z.object({
+  status: z.enum(["on_track", "at_risk", "blocked", "done", "unknown"]),
+  headline: z.string(),                          // one line for the Today card
+  percent: z.number().min(0).max(100).optional(),
+  done: z.array(z.string()).default([]),
+  inProgress: z.array(z.string()).default([]),
+  blocked: z.array(z.string()).default([]),
+  nextSteps: z.array(z.string()).default([]),
+  suggestedPrompt: z.string(),                   // what Continue should run next
+  risks: z.array(z.string()).default([]),
+  epics: z.array(z.object({ title: z.string(), status: z.enum(["todo", "in_progress", "done"]), notes: z.string().optional() })).default([]),
+  assessedAt: z.string().datetime().optional(),
+});
+export type ProgressAssessment = z.infer<typeof ProgressAssessment>;

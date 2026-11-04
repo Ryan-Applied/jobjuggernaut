@@ -12,6 +12,7 @@ import { graphRoutes } from "./graph.routes.js";
 import { projectRoutes } from "./projects.routes.js";
 import { ledgerRoutes, ledgerForTaskMode, signedGrantIdsForTask } from "./ledgers.routes.js";
 import { choreRoutes, ensureSystemSchedules } from "./chores.routes.js";
+import { ingestRoutes } from "./ingest.routes.js";
 
 const { db } = createDb();
 const bus = new EventBus();
@@ -126,6 +127,7 @@ app.route("/", graphRoutes(db));
 app.route("/", projectRoutes(db, temporal));
 app.route("/", ledgerRoutes(db, temporal));
 app.route("/", choreRoutes(db, temporal));
+app.route("/", ingestRoutes(db, temporal));
 
 app.post("/internal/materialise", async (c) => {
   const { choreId, taskId } = await c.req.json();

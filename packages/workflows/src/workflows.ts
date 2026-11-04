@@ -15,9 +15,29 @@ const indexer = proxyActivities<IndexerActivities>({
   retry: { maximumAttempts: 3, initialInterval: "5 seconds" },
 });
 
-/** Embed, link, extract lessons for one finished session. */
+/** Embed, link, extract lessons for one finished session; then reassess the project it belongs to. */
 export async function IndexWorkflow(input: { sessionId: string }) {
-  return indexer.indexSession(input);
+  const r = await indexer.indexSession(input);
+  const { projectId } = await cloud.sessionProject(input);
+  if (projectId) await executeChild(ProgressWorkflow, { args: [{ projectId }], workflowId: `progress-${projectId}-${input.sessionId.slice(0, 8)}` }).catch(() => undefined);
+  return r;
+}
+
+/** LLM progress assessment for a project, run on the project's runner (files + key live there). */
+export async function ProgressWorkflow(input: { projectId: string }) {
+  const inputs = await cloud.progressInputs(input);
+  if (!inputs) return { skipped: "no project" };
+  const local = localFor(inputs.runnerId);
+  const assessment = await local.assessProgress(inputs);
+  await cloud.storeProgress({ projectId: input.projectId, assessment });
+  return assessment;
+}
+
+export async function IngestProjectWorkflow(input: { workdir?: string; hint?: string; runnerId: string }) {
+  return localFor(input.runnerId).draftProject({ workdir: input.workdir, hint: input.hint });
+}
+export async function IngestWorkflowWorkflow(input: { text?: string; path?: string; runnerId: string }) {
+  return localFor(input.runnerId).draftWorkflow({ text: input.text, path: input.path });
 }
 
 /** Nightly: proposals for every workflow. Scheduled by the API (Phase 4). */
@@ -32,6 +52,7 @@ function localFor(runnerId: string) {
   return proxyActivities<LocalActivities>({
     taskQueue: localQueue(runnerId),
     startToCloseTimeout: "4 hours",
+    scheduleToStartTimeout: "2 minutes",
     heartbeatTimeout: "30 seconds",
     retry: { maximumAttempts: 3, initialInterval: "2 seconds", nonRetryableErrorTypes: ["SESSION_NOT_LIVE"] },
   });

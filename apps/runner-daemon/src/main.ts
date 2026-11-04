@@ -5,11 +5,18 @@ import { localQueue } from "@jj/workflows";
 import { SessionManager } from "./sessions.js";
 import { WorktreeManager } from "./worktrees.js";
 import { ApiClient } from "./api.js";
+import { draftProject, draftWorkflow, assessProgress, collectFacts, defaultLLM } from "@jj/ingest";
 
 const runnerId = process.env.RUNNER_ID ?? "laptop";
 const manager = new SessionManager(new ApiClient(), new WorktreeManager(), runnerId);
 
+const llm = defaultLLM(process.env.JJ_MOCK_RUNNER === "1");
+console.log(`[runner-daemon] ingestion LLM: ${llm?.name ?? "mock (no ANTHROPIC_API_KEY or JJ_MOCK_RUNNER=1)"}`);
+
 const activities: LocalActivities = {
+  draftProject: ({ workdir, hint }) => draftProject(workdir, hint, llm),
+  draftWorkflow: (src) => draftWorkflow(src, llm),
+  assessProgress: async (i) => assessProgress({ ...i, workdirFacts: i.workdir ? await collectFacts(i.workdir, 4000).catch(() => undefined) : undefined }, llm),
   describeRunner: () => manager.describe(),
   startSession: async (spec) => { const h = await manager.start(spec); return { vendorSessionRef: h.vendorSessionRef }; },
   pumpEvents: ({ sessionId, fromSeq }) => manager.pump(sessionId, fromSeq, (seq) => Context.current().heartbeat(seq), Context.current().cancellationSignal).catch((e) => {

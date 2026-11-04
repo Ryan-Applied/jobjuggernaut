@@ -7,7 +7,7 @@ import { CLOUD_QUEUE } from "./shared.js";
 export function createCloudActivities(): CloudActivities {
   const { db } = createDb();
   const apiUrl = process.env.API_URL ?? "http://localhost:4000";
-  return {
+  const acts: CloudActivities = {
     async createSessionNode({ sessionId, title, props }) {
       await upsertSessionNode(db, sessionId, title, props);
     },
@@ -92,6 +92,23 @@ export function createCloudActivities(): CloudActivities {
       const { grantIds, def } = (await r.json()) as any;
       return { def: { ...snap, ...def, taskId, grantIds } };
     },
+    async sessionProject({ sessionId }) {
+      const [s] = (await db.execute(sql`select props->>'projectId' as pid from nodes where id = ${sessionId}`)) as any[];
+      return { projectId: s?.pid ?? undefined };
+    },
+    async progressInputs({ projectId }) {
+      const [p] = (await db.execute(sql`select title, props from nodes where id = ${projectId} and type = 'project'`)) as any[];
+      if (!p) return undefined;
+      const context = await acts.projectContext({ projectId });
+      const recent = (await db.execute(sql`select title, props from nodes where type = 'session' and props->>'projectId' = ${projectId} and props->>'outcome' is not null order by created_at desc limit 5`)) as any[];
+      const recentSummaries = recent.map((r) => { const sm = r.props.summary ?? {}; return `${r.title}: ${r.props.outcome}; tools ${Object.keys(sm.tools ?? {}).join(",") || "none"}; parked ${(sm.parked ?? []).map((x: any) => `${x.tool} ${x.resolved}`).join(",") || "none"}; lessons: ${(r.props.lessons ?? []).slice(0, 2).join(" | ")}`; });
+      return { projectTitle: p.title, goal: p.props.goal, context, recentSummaries, previous: p.props.progress, workdir: p.props.workdir, runnerId: p.props.runnerId ?? "laptop" };
+    },
+    async storeProgress({ projectId, assessment }) {
+      const [p] = (await db.execute(sql`select props from nodes where id = ${projectId}`)) as any[];
+      const history = [...(p?.props?.progressHistory ?? []).slice(-9), { at: assessment.assessedAt, status: assessment.status, headline: assessment.headline, percent: assessment.percent }];
+      await db.execute(sql`update nodes set props = props || ${JSON.stringify({ progress: assessment, progressHistory: history })}::jsonb, updated_at = now() where id = ${projectId}`);
+    },
     async startIndexing({ sessionId }) {
       const connection = await Connection.connect({ address: process.env.TEMPORAL_ADDRESS ?? "localhost:7233" });
       const client = new Client({ connection, namespace: process.env.TEMPORAL_NAMESPACE ?? "default" });
@@ -99,4 +116,5 @@ export function createCloudActivities(): CloudActivities {
       await connection.close();
     },
   };
+  return acts;
 }

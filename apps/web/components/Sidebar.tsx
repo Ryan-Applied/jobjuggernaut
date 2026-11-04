@@ -2,7 +2,7 @@
 import { usePathname } from "next/navigation";
 const items = [
   ["Today", "/today"], ["Sessions", "/"], ["Graph", "/graph"], ["Approvals", "/approvals"],
-  ["Chores", "/chores"], ["Workflows", "/workflows"], ["Proposals", "/proposals"], ["Audit log", "/audit"],
+  ["Chores", "/chores"], ["Workflows", "/workflows"], ["Ingest", "/drafts"], ["Proposals", "/proposals"], ["Audit log", "/audit"],
 ];
 export function Sidebar() {
   const path = usePathname();
