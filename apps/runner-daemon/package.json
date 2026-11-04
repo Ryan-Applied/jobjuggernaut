@@ -17,6 +17,7 @@
     "@jj/runner-gemini": "workspace:*",
     "@jj/runner-mock": "workspace:*",
     "@jj/runner-openai": "workspace:*",
+    "@jj/ingest": "workspace:*",
     "@jj/workflows": "workspace:*",
     "@temporalio/activity": "^1.11.5",
     "@temporalio/worker": "^1.11.5"

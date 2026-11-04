@@ -16,7 +16,7 @@ export function Today() {
     await post("/projects", { title, workdir, goal, defaultMode: "assist" }); load();
   }
   async function cont(p: any, mode: "auto" | "assist" | "manual") {
-    const prompt = window.prompt(`Continue "${p.title}" in ${mode} mode. Anything to add to the goal?`, p.props.goal ?? "") ?? undefined;
+    const prompt = window.prompt(`Continue "${p.title}" in ${mode} mode. Edit the prompt or accept:`, p.props.progress?.suggestedPrompt ?? p.props.goal ?? "") ?? undefined;
     if (prompt === undefined) return;
     await post(`/projects/${p.id}/continue`, { mode, prompt: prompt || undefined }); load();
   }
@@ -30,7 +30,7 @@ export function Today() {
   return (
     <>
       <Header title="Today" sub={brief ? `Window: last ${brief.window.hours} h. ${new Date().toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}` : ""}>
-        <Btn href="/approvals">Approvals</Btn><Btn primary onClick={newProject}>New project</Btn>
+        <Btn href="/approvals">Approvals</Btn><Btn href="/drafts">Ingest</Btn><Btn primary onClick={newProject}>New project</Btn>
       </Header>
       <div className="p-6 flex flex-col gap-5">
         {t && <div className="grid grid-cols-6 gap-3">
@@ -46,6 +46,8 @@ export function Today() {
             <Card key={p.id} accent={p.parked > 0 || p.awaiting > 0 ? "red" : undefined}>
               <div className="flex items-center gap-2"><a href={`/projects/${p.id}`} className="font-bold text-[15px]">{p.title}</a><Pill>{p.props.defaultMode ?? "assist"}</Pill>{p.running > 0 && <Pill tone="green">{p.running} running</Pill>}{p.parked > 0 && <Pill tone="red">{p.parked} parked</Pill>}{p.awaiting > 0 && <Pill tone="amber">go-ahead needed</Pill>}<span className="ml-auto text-xs text-muted font-mono">{p.props.workdir ?? "scratch"}</span></div>
               {p.props.goal && <div className="text-[13px] text-ink-2"><span className="text-muted">Goal:</span> {p.props.goal}</div>}
+              {p.props.progress && <div className="flex items-center gap-2 text-[13px]"><Pill tone={p.props.progress.status === "on_track" ? "green" : p.props.progress.status === "blocked" ? "red" : p.props.progress.status === "at_risk" ? "amber" : "grey"}>{p.props.progress.status.replace("_", " ")}{p.props.progress.percent != null ? ` ${p.props.progress.percent}%` : ""}</Pill><span className="text-ink-2">{p.props.progress.headline}</span></div>}
+              {p.props.progress?.nextSteps?.[0] && <div className="text-[13px]"><span className="text-muted">Next:</span> {p.props.progress.nextSteps[0]}</div>}
               <div className="font-mono text-xs rounded px-2.5 py-2 bg-card-alt text-ink-2">
                 {ls ? <>{new Date(ls.created_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}  {lp.state}{lp.outcome ? ` (${lp.outcome})` : ""}  {lp.lastEvent ? lp.lastEvent.slice(0, 70) : ""}{lp.parkedGap ? ` ${lp.parkedGap}` : ""}</> : "No sessions yet."}
               </div>

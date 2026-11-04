@@ -19,8 +19,9 @@ import { WorktreeManager } from "./worktrees.js";
 import type { ApiLike } from "./api.js";
 
 const ADDRESS = process.env.TEMPORAL_ADDRESS ?? "localhost:7233";
-// Queue names are compiled into the workflow bundle, so the test uses the real ones.
-// Do not run this while the dev stack is up against the same Temporal server.
+const NAMESPACE = process.env.TEMPORAL_TEST_NAMESPACE ?? "jj-test";
+// Queue names are compiled into the workflow bundle, so the test uses the real ones but in its own
+// namespace (created below), so it never shares tasks with a running dev stack.
 const RUNNER_ID = `test-${process.pid}`;
 const LOCAL_QUEUE = localQueue(RUNNER_ID);
 const WF = "00000000-0000-4000-8000-000000000001";
@@ -48,12 +49,18 @@ function cloudActivities(): CloudActivities {
     async projectContext() { return ""; },
     async markTask() {},
     async tonightTasks() { return []; },
+    async sessionProject() { return {}; },
+    async progressInputs() { return undefined; },
+    async storeProgress() {},
     async materialiseChore() { return { skipped: "test" }; },
   };
 }
 
 function localActivities(manager: SessionManager): LocalActivities {
   return {
+    draftProject: async () => { throw new Error("not in this test"); },
+    draftWorkflow: async () => { throw new Error("not in this test"); },
+    assessProgress: async () => { throw new Error("not in this test"); },
     describeRunner: () => manager.describe(),
     startSession: async (spec) => ({ vendorSessionRef: (await manager.start(spec)).vendorSessionRef }),
     pumpEvents: ({ sessionId, fromSeq }) => manager.pump(sessionId, fromSeq, (seq) => Context.current().heartbeat(seq), Context.current().cancellationSignal).catch((e) => {
@@ -80,15 +87,18 @@ async function startLocal() {
   manager = new SessionManager(api, new WorktreeManager(`/tmp/jj-test-${process.pid}`), RUNNER_ID, {
     claude: new MockRunner("mock-claude", RUNNER_ID), gemini: new MockRunner("mock-gemini", RUNNER_ID),
   });
-  local = await Worker.create({ connection, taskQueue: LOCAL_QUEUE, activities: localActivities(manager), shutdownGraceTime: "200ms" });
+  local = await Worker.create({ connection, namespace: NAMESPACE, taskQueue: LOCAL_QUEUE, activities: localActivities(manager), shutdownGraceTime: "200ms" });
   localRun = local.run();
 }
 
 beforeAll(async () => {
   Runtime.install({ logger: { log() {}, trace() {}, debug() {}, info() {}, warn() {}, error() {} } as any });
+  const conn = await Connection.connect({ address: ADDRESS });
+  await conn.workflowService.registerNamespace({ namespace: NAMESPACE, workflowExecutionRetentionPeriod: { seconds: 86400 as any } }).catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 1500)); // namespace propagation on the dev server
   connection = await NativeConnection.connect({ address: ADDRESS });
-  client = new Client({ connection: await Connection.connect({ address: ADDRESS }) });
-  cloud = await Worker.create({ connection, taskQueue: CLOUD_QUEUE, workflowsPath, activities: cloudActivities() });
+  client = new Client({ connection: conn, namespace: NAMESPACE });
+  cloud = await Worker.create({ connection, namespace: NAMESPACE, taskQueue: CLOUD_QUEUE, workflowsPath, activities: cloudActivities() });
   cloudRun = cloud.run();
   await startLocal();
 }, 120_000);

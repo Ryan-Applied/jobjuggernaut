@@ -4,7 +4,7 @@
  *  - cloud activities in apps/indexer and apps/api (writeEvents, recordOutcome)
  * Temporal routes by task queue, so one workflow calls both sets.
  */
-import type { SessionEvent, SessionSpec, RunnerCapabilities } from "@jj/core";
+import type { SessionEvent, SessionSpec, RunnerCapabilities, ProjectDraft, WorkflowDraft, ProgressAssessment } from "@jj/core";
 
 export interface LocalActivities {
   describeRunner(): Promise<RunnerCapabilities>;
@@ -12,6 +12,10 @@ export interface LocalActivities {
   /** Pumps events from the runner's stream to the API in batches, returning when the session ends or parks. Heartbeats lastSeq. */
   pumpEvents(input: { sessionId: string; fromSeq: number }): Promise<{ lastSeq: number; ended: boolean; parkedCallId?: string; parkedGap?: string; spendGbp: number; outcome?: string }>;
   resumeSession(input: { sessionId: string; callId: string; approved: boolean; grantIds?: string[] }): Promise<void>;
+  /** LLM-assisted, run where the files and the vendor key live. */
+  draftProject(input: { workdir?: string; hint?: string }): Promise<ProjectDraft>;
+  draftWorkflow(input: { text?: string; path?: string }): Promise<WorkflowDraft>;
+  assessProgress(input: { projectTitle: string; goal?: string; context: string; recentSummaries: string[]; previous?: unknown; workdir?: string }): Promise<ProgressAssessment>;
   /** Read-only look at a project workdir for the continuation pack. */
   inspectWorkdir(input: { workdir: string }): Promise<{ isRepo: boolean; branch?: string; dirty?: number; recentCommits?: string[]; openBranches?: string[]; hasClaudeMd?: boolean; files?: number }>;
   cancelSession(input: { sessionId: string; reason: string }): Promise<void>;
@@ -28,6 +32,10 @@ export interface CloudActivities {
   markTask(input: { taskId: string; state: string; extra?: Record<string, unknown> }): Promise<void>;
   /** Tasks queued for tonight with their ledger status. */
   tonightTasks(input: { until: string }): Promise<Array<{ def: TaskDefinition; signedGrantIds?: string[] }>>;
+  /** Progress inputs for a project and where to store the result. */
+  progressInputs(input: { projectId: string }): Promise<{ projectTitle: string; goal?: string; context: string; recentSummaries: string[]; previous?: unknown; workdir?: string; runnerId: string } | undefined>;
+  storeProgress(input: { projectId: string; assessment: ProgressAssessment }): Promise<void>;
+  sessionProject(input: { sessionId: string }): Promise<{ projectId?: string }>;
   /** Chore fire: create a task node + ledger from the chore's template; returns the definition to run. */
   materialiseChore(input: { choreId: string }): Promise<{ def: TaskDefinition } | { skipped: string }>;
 }

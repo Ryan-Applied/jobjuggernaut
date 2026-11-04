@@ -36,7 +36,8 @@ With no grants loaded, every tool call parks and shows Approve once / Deny in th
 2. A project is a name, a repo or folder to work in (repo => worktree per session, folder => in place, none => scratch), a goal, a default mode and a grant template. Every session starts with a **continuation pack**: the goal, the last sessions' outcomes and lessons, open approvals, and a live look at the workdir (branch, dirty files, recent commits, CLAUDE.md). "Bring in" a session from another project to fold its prompt and lessons into the pack.
 3. **Approvals**: draft ledgers for tonight's queue (edit caps, drop grants, sign), parked calls (approve once / add to grant / deny), assist go-aheads. Slack gets the same card when configured.
 4. **Chores** are Temporal Schedules; each fire builds a fresh task and ledger from the project's current template. System schedules: overnight batch 22:00, nightly learn 03:00.
-5. The **indexer** embeds each finished session, links similar ones, extracts lessons and proposes grant-template and skill edits; nothing changes without your accept.
+5. **Ingest**: point the platform at a repo or folder (plus a hint), or paste a runbook; an LLM on the runner drafts the project (goal, continue steps, intended actions, read-only grant template, skills, epics, a suggested chore) or the workflow (steps, prompts, connectors, actions). Review, edit, accept. After every indexed session the LLM reassesses the project: status, done, in progress, blocked, next steps, risks, and the prompt the next session should run; that drives the Today card and the default Continue prompt. Needs `ANTHROPIC_API_KEY` on the runner; without it (or with `JJ_MOCK_RUNNER=1`) a deterministic offline drafter is used.
+6. The **indexer** embeds each finished session, links similar ones, extracts lessons and proposes grant-template and skill edits; nothing changes without your accept.
 
 ## Gotchas found on first run
 
@@ -48,7 +49,7 @@ With no grants loaded, every tool call parks and shows Approve once / Deny in th
 ## Tests
 
 - `pnpm test` runs unit tests (policy matcher).
-- `pnpm test:integration` runs the Phase 1 exit test with the **mock runner** against a Temporal server on `TEMPORAL_ADDRESS`: 5 parallel sessions visible under 2 s, park → approve → resume, grant allow, approver deny, cancel mid-run, and runner-daemon restart mid-session. Do not run it while the dev stack is attached to the same Temporal server (they share queue names).
+- `pnpm test:integration` runs the Phase 1 exit test with the **mock runner** against a Temporal server on `TEMPORAL_ADDRESS`, in its own namespace (`jj-test`), so it is safe alongside the dev stack: 5 parallel sessions visible under 2 s, park → approve → resume, grant allow, approver deny, cancel mid-run, and runner-daemon restart mid-session.
 - `pnpm dev:mock` runs the whole stack with the mock runner so the UI can be exercised with no vendor keys.
 
 ## Deploying

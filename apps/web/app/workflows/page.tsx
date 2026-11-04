@@ -15,7 +15,7 @@ export default function Page() {
   }
   return (
     <>
-      <Header title="Workflows" sub={`${rows.length} defined`}><Btn primary onClick={create}>New workflow</Btn></Header>
+      <Header title="Workflows" sub={`${rows.length} defined`}><Btn href="/drafts">Ingest from text</Btn><Btn primary onClick={create}>New workflow</Btn></Header>
       <div className="p-6 grid grid-cols-2 gap-4">
         {rows.map((w) => (
           <Card key={w.id}><div className="flex items-center gap-2"><a href={`/workflows/${w.id}`} className="font-bold">{w.title}</a>{w.chores > 0 && <span className="text-xs text-green font-semibold">chore</span>}</div>

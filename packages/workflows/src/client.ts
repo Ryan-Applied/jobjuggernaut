@@ -1,5 +1,5 @@
 import { Connection, Client } from "@temporalio/client";
-import { TaskWorkflow, SessionWorkflow, IndexWorkflow, NightlyLearnWorkflow, OvernightBatchWorkflow, ChoreRunWorkflow } from "./workflows.js";
+import { TaskWorkflow, SessionWorkflow, IndexWorkflow, NightlyLearnWorkflow, OvernightBatchWorkflow, ChoreRunWorkflow, ProgressWorkflow, IngestProjectWorkflow, IngestWorkflowWorkflow } from "./workflows.js";
 import { CLOUD_QUEUE, type TaskDefinition, approveSignal, cancelSignal, continueSignal, ledgerSignedSignal, statusQuery, taskStatusQuery, batchStatusQuery } from "./shared.js";
 
 export async function temporalClient() {
@@ -35,4 +35,16 @@ export async function notifyLedgerSigned(client: Client, taskId: string, grantId
   for await (const wf of open) await client.workflow.getHandle(wf.workflowId).signal(ledgerSignedSignal, taskId, grantIds).catch(() => undefined);
 }
 export async function batchStatus(client: Client, workflowId: string) { return client.workflow.getHandle(workflowId).query(batchStatusQuery); }
-export { SessionWorkflow, TaskWorkflow, IndexWorkflow, NightlyLearnWorkflow, OvernightBatchWorkflow, ChoreRunWorkflow };
+export async function ingestProject(client: Client, input: { workdir?: string; hint?: string; runnerId: string }) {
+  const h = await client.workflow.start(IngestProjectWorkflow, { args: [input], taskQueue: CLOUD_QUEUE, workflowId: `ingest-project-${Date.now()}` });
+  return h.result();
+}
+export async function ingestWorkflow(client: Client, input: { text?: string; path?: string; runnerId: string }) {
+  const h = await client.workflow.start(IngestWorkflowWorkflow, { args: [input], taskQueue: CLOUD_QUEUE, workflowId: `ingest-workflow-${Date.now()}` });
+  return h.result();
+}
+export async function assessProject(client: Client, projectId: string) {
+  const h = await client.workflow.start(ProgressWorkflow, { args: [{ projectId }], taskQueue: CLOUD_QUEUE, workflowId: `progress-${projectId}-manual-${Date.now()}` });
+  return h.result();
+}
+export { SessionWorkflow, TaskWorkflow, IndexWorkflow, NightlyLearnWorkflow, OvernightBatchWorkflow, ChoreRunWorkflow, ProgressWorkflow, IngestProjectWorkflow, IngestWorkflowWorkflow };

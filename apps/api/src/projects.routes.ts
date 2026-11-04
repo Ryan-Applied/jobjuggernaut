@@ -78,7 +78,10 @@ export function projectRoutes(db: Db, temporal: Client) {
     const [p] = (await db.execute(sql`select id, title, props from nodes where id = ${id} and type = 'project'`)) as any[];
     if (!p) return c.json({ error: "not found" }, 404);
     const mode = body.mode ?? p.props.defaultMode ?? "assist";
-    const steps = body.steps ?? (body.prompt ? [{ name: "continue", prompt: body.prompt, skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }] : p.props.continueSteps) ?? [{ name: "continue", prompt: p.props.goal ?? "Continue the project.", skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }];
+    const suggested = p.props.progress?.suggestedPrompt as string | undefined;
+    const steps = body.steps ?? (body.prompt ? [{ name: "continue", prompt: body.prompt, skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }]
+      : suggested ? [{ name: "continue", prompt: suggested, skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }, ...((p.props.continueSteps ?? []).filter((s: any) => s.reviewerOfPrevious))]
+      : p.props.continueSteps) ?? [{ name: "continue", prompt: p.props.goal ?? "Continue the project.", skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }];
 
     // Pull in other sessions: their lessons and prompts become part of the context, and a derived_from edge is recorded.
     let imported = "";
