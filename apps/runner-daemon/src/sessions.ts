@@ -86,6 +86,8 @@ export class SessionManager {
     };
     // Live UI: anything buffered goes out within 150 ms even if the runner is quiet.
     const schedule = () => { if (!timer) timer = setTimeout(() => void flush(), 150); };
+    // Liveness: heartbeat on a timer too. A real session can be silent for minutes on a long tool run.
+    const pulse = setInterval(() => { try { heartbeat(lastSeq); } catch {} }, 10_000);
     const aborted = () => { const e: any = new Error(`PUMP_ABORTED ${sessionId}`); e.code = "PUMP_ABORTED"; return e; };
     const next = () => signal
       ? Promise.race([l.iterator.next(), new Promise<never>((_, rej) => signal.addEventListener("abort", () => rej(aborted()), { once: true }))])
@@ -108,7 +110,7 @@ export class SessionManager {
           return { lastSeq, ended: false, parkedCallId: e.callId, parkedGap: e.grantGap, spendGbp: l.spendGbp };
         }
       }
-    } finally { await flush().catch(() => undefined); }
+    } finally { clearInterval(pulse); await flush().catch(() => undefined); }
   }
 
   async resume(sessionId: string, callId: string, approved: boolean, grantIds?: string[]) {
