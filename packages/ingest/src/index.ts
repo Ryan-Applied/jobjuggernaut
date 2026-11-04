@@ -1,7 +1,7 @@
-import { ProjectDraft, WorkflowDraft, ProgressAssessment } from "@jj/core";
+import { ProjectDraft, WorkflowDraft, ProgressAssessment, Lessons } from "@jj/core";
 import type { LLM } from "./llm.js";
 import { collectFacts, factsToText, type WorkdirFacts } from "./facts.js";
-import { mockProjectDraft, mockWorkflowDraft, mockAssessment } from "./mock.js";
+import { mockProjectDraft, mockWorkflowDraft, mockAssessment, mockLessons } from "./mock.js";
 
 export * from "./llm.js";
 export * from "./facts.js";
@@ -26,14 +26,23 @@ export async function draftWorkflow(source: { text?: string; path?: string }, ll
   return llm.structured({ system, user: text, schema: WorkflowDraft, schemaName: "workflow_draft", maxTokens: 5000 });
 }
 
-export interface ProgressInput { projectTitle: string; goal?: string; context: string; recentSummaries: string[]; previous?: unknown; workdirFacts?: WorkdirFacts }
+export interface ProgressInput { projectTitle: string; goal?: string; context: string; recentSummaries: string[]; previous?: unknown; workdirFacts?: WorkdirFacts; memory?: unknown }
+
+/** D1: lessons written by the model from a session summary and its nearest neighbours. */
+export async function writeLessons(input: { summary: unknown; neighbours: unknown[]; heuristic: string[] }, llm?: LLM): Promise<Lessons> {
+  if (!llm) return mockLessons(input.heuristic);
+  const system = `You extract lessons from one agent session for the operator who runs many. A lesson is something that changes what the next session or the operator does: a grant that should be in the template, a prompt that should be more specific, a skill rule, a cost pattern, a process gap. Be concrete, cite the tool or file involved, and do not restate the summary. 0 to 8 lessons, best first.`;
+  const user = `Session summary:\n${JSON.stringify(input.summary).slice(0, 6000)}\n\nNearest similar sessions:\n${JSON.stringify(input.neighbours).slice(0, 6000)}\n\nHeuristic observations already made:\n${input.heuristic.join("\n")}`;
+  return llm.structured({ system, user, schema: Lessons, schemaName: "lessons", maxTokens: 1500 });
+}
 
 export async function assessProgress(input: ProgressInput, llm?: LLM): Promise<ProgressAssessment> {
   if (!llm) return mockAssessment(input);
-  const system = `You are the operator's chief of staff for one project. From the continuation context, the most recent session summaries, the previous assessment and the current state of the folder, produce an honest progress assessment: status, a one-line headline, what is done, in progress and blocked, the 1 to 5 next steps in priority order, risks, epic statuses, and the exact prompt the next autonomous session should run (specific, scoped to one sitting, referencing files and branches where known). Do not restate completed work as next steps. If sessions keep parking on the same action, say so as a blocker.`;
+  const system = `You are the operator's chief of staff for one project. From the continuation context, the most recent session summaries, the previous assessment, the project memory and the current state of the folder, produce an honest progress assessment: status, a one-line headline, what is done, in progress and blocked, the 1 to 5 next steps in priority order, risks, epic statuses, and the exact prompt the next autonomous session should run (specific, scoped to one sitting, referencing files and branches where known). Do not restate completed work as next steps. If sessions keep parking on the same action, say so as a blocker. Also maintain the project memory: add decisions and conventions that are now evidenced, open questions that arose, and list in retire any existing memory line that is no longer true. Memory lines are short, durable facts, not status.`;
   const user = [`Project: ${input.projectTitle}`, input.goal ? `Goal: ${input.goal}` : "", `Context:\n${input.context}`,
     input.recentSummaries.length ? `Recent session summaries (newest first):\n${input.recentSummaries.map((s, i) => `${i + 1}. ${s}`).join("\n")}` : "No sessions yet.",
     input.previous ? `Previous assessment:\n${JSON.stringify(input.previous).slice(0, 4000)}` : "",
+    input.memory ? `Project memory:\n${JSON.stringify(input.memory).slice(0, 3000)}` : "",
     input.workdirFacts ? `Folder now:\n${factsToText({ ...input.workdirFacts, docs: {}, manifests: {} }).slice(0, 4000)}` : ""].filter(Boolean).join("\n\n");
   const a = await llm.structured({ system, user, schema: ProgressAssessment, schemaName: "progress_assessment", maxTokens: 4000 });
   a.assessedAt = new Date().toISOString();

@@ -5,6 +5,8 @@ export interface ApiLike {
   postEvents(events: SessionEvent[]): Promise<void>;
   fetchGrants(ids: string[]): Promise<Grant[]>;
   audit(row: { sessionId: string; tool: string; args: Record<string, unknown>; decision: string; grantId?: string; decidedBy: string }): Promise<void>;
+  note(sessionId: string, props: Record<string, unknown>): Promise<void>;
+  heartbeat(info: Record<string, unknown>): Promise<void>;
 }
 
 export class ApiClient implements ApiLike {
@@ -19,6 +21,12 @@ export class ApiClient implements ApiLike {
     const r = await fetch(`${this.base}/grants?ids=${ids.join(",")}`, { headers: this.headers() });
     if (!r.ok) throw new Error(`fetchGrants ${r.status}`);
     return (await r.json()).grants;
+  }
+  async note(sessionId: string, props: Record<string, unknown>) {
+    await fetch(`${this.base}/sessions/${sessionId}/note`, { method: "POST", headers: this.headers(), body: JSON.stringify(props) }).catch(() => undefined);
+  }
+  async heartbeat(info: Record<string, unknown>) {
+    await fetch(`${this.base}/runners/heartbeat`, { method: "POST", headers: this.headers(), body: JSON.stringify(info) }).catch(() => undefined);
   }
   async audit(row: { sessionId: string; tool: string; args: Record<string, unknown>; decision: string; grantId?: string; decidedBy: string }) {
     const argsHash = createHash("sha256").update(JSON.stringify(row.args)).digest("hex").slice(0, 16);

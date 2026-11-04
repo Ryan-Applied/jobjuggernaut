@@ -1,5 +1,5 @@
 /** Deterministic drafts from facts alone. Used in tests and under JJ_MOCK_RUNNER. */
-import type { ProjectDraft, WorkflowDraft, ProgressAssessment } from "@jj/core";
+import type { ProjectDraft, WorkflowDraft, ProgressAssessment, Lessons } from "@jj/core";
 import type { WorkdirFacts } from "./facts.js";
 import type { ProgressInput } from "./index.js";
 
@@ -43,6 +43,12 @@ export function mockAssessment(i: ProgressInput): ProgressAssessment {
     done: i.recentSummaries.slice(1).map((s) => s.slice(0, 60)), inProgress: n ? [i.recentSummaries[0].slice(0, 60)] : [], blocked,
     nextSteps: ["Run the tests and fix the first failure", "Pick the next epic", "Open a PR for review"],
     suggestedPrompt: `Continue ${i.projectTitle}: ${i.goal ?? "work the goal"}. Start by running the tests; fix the first failure; commit on the current jj/ branch.`,
-    risks: [], epics: [], assessedAt: new Date().toISOString(),
+    risks: [], epics: [],
+    memory: { decisions: n ? ["Sessions run from the project workdir on a jj/ branch."] : [], conventions: [], openQuestions: blocked.length ? ["Which grant should cover the parked action?"] : [], retire: [] },
+    assessedAt: new Date().toISOString(),
   };
+}
+
+export function mockLessons(heuristic: string[]): Lessons {
+  return { lessons: heuristic.slice(0, 8).map((text) => ({ text, kind: /park|grant/i.test(text) ? "grant" as const : /cost|£/.test(text) ? "cost" as const : "other" as const, confidence: 0.6 })) };
 }

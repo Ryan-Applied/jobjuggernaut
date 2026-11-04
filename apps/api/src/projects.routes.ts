@@ -71,12 +71,15 @@ export function projectRoutes(db: Db, temporal: Client) {
     from: z.array(z.string().uuid()).default([]),
     scheduledFor: z.string().datetime().optional(),
     runnerId: z.string().optional(),
+    priority: z.number().int().optional(), runnerAffinity: z.enum(["fixed", "any"]).optional(), budgetGbp: z.number().positive().optional(), deadline: z.string().datetime().optional(),
+    interactive: z.boolean().optional(),
   });
   r.post("/projects/:id/continue", async (c) => {
     const id = c.req.param("id");
     const body = Continue.parse(await c.req.json());
     const [p] = (await db.execute(sql`select id, title, props from nodes where id = ${id} and type = 'project'`)) as any[];
     if (!p) return c.json({ error: "not found" }, 404);
+    if (p.props.paused) return c.json({ error: "project is paused" }, 409);
     const mode = body.mode ?? p.props.defaultMode ?? "assist";
     const suggested = p.props.progress?.suggestedPrompt as string | undefined;
     const steps = body.steps ?? (body.prompt ? [{ name: "continue", prompt: body.prompt, skills: [], connectors: [], intendedActions: [], maxCostGbp: 5 }]
@@ -94,11 +97,13 @@ export function projectRoutes(db: Db, temporal: Client) {
 
     const taskId = crypto.randomUUID();
     const workflowId = p.props.workflowId ?? (await ensureWorkflow(db, p));
+    if (body.interactive) steps[0] = { ...steps[0], interactive: true };
     const def: TaskDefinition = {
       taskId, workflowId, projectId: id, title: `${p.title}: ${steps[0].name}`, steps, grantIds: [], runnerId: body.runnerId ?? p.props.runnerId ?? "laptop",
       mode, projectWorkdir: p.props.workdir, context: imported || undefined,
+      priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline,
     };
-    await db.execute(sql`insert into nodes (id, type, title, props) values (${taskId}, 'task', ${def.title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId, projectId: id, mode, projectWorkdir: p.props.workdir, scheduledFor: body.scheduledFor, state: body.scheduledFor ? "queued" : "starting", from: body.from })}::jsonb)`);
+    await db.execute(sql`insert into nodes (id, type, title, props) values (${taskId}, 'task', ${def.title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId, projectId: id, mode, projectWorkdir: p.props.workdir, scheduledFor: body.scheduledFor, state: body.scheduledFor ? "queued" : "starting", from: body.from, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline })}::jsonb)`);
     await db.execute(sql`insert into edges (src, dst, type) values (${taskId}, ${id}, 'belongs_to') on conflict do nothing`);
 
     // Now: ledger for the mode (auto/assist signed from the template; manual none).
@@ -115,6 +120,22 @@ export function projectRoutes(db: Db, temporal: Client) {
     def.grantIds = ledger?.status === "signed" ? await signedGrantIdsForTask(db, taskId) : [];
     const h = await startTask(temporal, def);
     return c.json({ taskId, workflowRunId: h.firstExecutionRunId, mode, grants: def.grantIds.length });
+  });
+
+  // C5: pause a project: refuses new continues and pauses its chores
+  r.post("/projects/:id/pause", async (c) => {
+    const id = c.req.param("id");
+    await db.execute(sql`update nodes set props = props || '{"paused":true}'::jsonb where id = ${id}`);
+    const chores = (await db.execute(sql`select id from nodes where type = 'chore' and props->>'projectId' = ${id}`)) as any[];
+    for (const ch of chores) { await temporal.schedule.getHandle(`chore-${ch.id}`).pause("project paused").catch(() => undefined); await db.execute(sql`update nodes set props = props || '{"paused":true}'::jsonb where id = ${ch.id}`); }
+    return c.json({ ok: true, chores: chores.length });
+  });
+  r.post("/projects/:id/unpause", async (c) => {
+    const id = c.req.param("id");
+    await db.execute(sql`update nodes set props = props || '{"paused":false}'::jsonb where id = ${id}`);
+    const chores = (await db.execute(sql`select id from nodes where type = 'chore' and props->>'projectId' = ${id}`)) as any[];
+    for (const ch of chores) { await temporal.schedule.getHandle(`chore-${ch.id}`).unpause().catch(() => undefined); await db.execute(sql`update nodes set props = props || '{"paused":false}'::jsonb where id = ${ch.id}`); }
+    return c.json({ ok: true });
   });
 
   r.post("/tasks/:id/go", async (c) => {

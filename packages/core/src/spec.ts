@@ -19,7 +19,7 @@ export const SessionSpec = z.object({
   workdir: z.string(),
   /** Project workdir on the runner host. Repo => worktree per session; folder => in place; absent => scratch. */
   projectWorkdir: z.string().optional(),
-  isolation: z.enum(["worktree", "inplace", "scratch"]).optional(),
+  isolation: z.enum(["worktree", "inplace", "scratch", "container"]).optional(),
   /** Continuation pack: what the session should know before it starts. Prepended to the prompt. */
   context: z.string().optional(),
   budget: z.object({
@@ -30,6 +30,11 @@ export const SessionSpec = z.object({
   requires: z.array(z.string()).default([]),
   preferredVendor: Vendor.optional(),
   reviewerOf: z.string().uuid().optional(),
+  /** Vendor to avoid (reviewer must differ from author). */
+  avoidVendor: Vendor.optional(),
+  /** Keep the session open for follow-up input after the first turn (B1). Idle timeout in minutes. */
+  interactive: z.boolean().optional(),
+  idleMinutes: z.number().int().positive().optional(),
 });
 export type SessionSpec = z.infer<typeof SessionSpec>;
 
@@ -48,7 +53,7 @@ export const RunnerCapabilities = z.object({
 });
 export type RunnerCapabilities = z.infer<typeof RunnerCapabilities>;
 
-export const SessionInput = z.object({ text: z.string() });
+export const SessionInput = z.object({ text: z.string(), /** End the session after this turn completes. */ final: z.boolean().optional() });
 export type SessionInput = z.infer<typeof SessionInput>;
 
 // ---- LLM-assisted ingestion and progress ---------------------------------------------
@@ -60,6 +65,11 @@ export const StepDraft = z.object({
   skills: z.array(z.string()).default([]), connectors: z.array(z.string()).default([]),
   preferredVendor: Vendor.optional(), reviewerOfPrevious: z.boolean().optional(),
   intendedActions: z.array(IntendedAction).default([]), maxCostGbp: z.number().positive().default(2),
+  /** C1: run after these steps (by name). Steps with no `after` run in the first wave. */
+  after: z.array(z.string()).optional(),
+  /** C2: retries on failure, and what to do when retries are exhausted. */
+  retry: z.number().int().min(0).max(5).optional(),
+  onFailure: z.string().optional(),            // "stop" (default) | "continue" | "run:<stepName>"
 });
 export const ProjectDraft = z.object({
   title: z.string(),
@@ -97,6 +107,19 @@ export const ProgressAssessment = z.object({
   suggestedPrompt: z.string(),                   // what Continue should run next
   risks: z.array(z.string()).default([]),
   epics: z.array(z.object({ title: z.string(), status: z.enum(["todo", "in_progress", "done"]), notes: z.string().optional() })).default([]),
+  /** D6: durable project memory the LLM maintains across sessions. Merged, not replaced. */
+  memory: z.object({
+    decisions: z.array(z.string()).default([]),      // "We use pnpm, not npm"
+    conventions: z.array(z.string()).default([]),    // "Branches are jj/<topic>"
+    openQuestions: z.array(z.string()).default([]),
+    retire: z.array(z.string()).default([]),         // memory lines that are no longer true
+  }).optional(),
   assessedAt: z.string().datetime().optional(),
 });
 export type ProgressAssessment = z.infer<typeof ProgressAssessment>;
+
+export const Lessons = z.object({
+  lessons: z.array(z.object({ text: z.string(), kind: z.enum(["grant", "prompt", "skill", "cost", "process", "other"]).default("other"), confidence: z.number().min(0).max(1).default(0.7) })).max(8),
+});
+export type Lessons = z.infer<typeof Lessons>;
+

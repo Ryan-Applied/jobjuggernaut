@@ -37,6 +37,8 @@ const api: ApiLike = {
   async postEvents(batch) { events.push(...batch); },
   async fetchGrants(ids) { return ids.map((id) => grants.get(id)).filter((g): g is Grant => !!g); },
   async audit(row) { audit.push({ tool: row.tool, decision: row.decision }); },
+  async note() {},
+  async heartbeat() {},
 };
 
 function cloudActivities(): CloudActivities {
@@ -50,6 +52,7 @@ function cloudActivities(): CloudActivities {
     async markTask() {},
     async tonightTasks() { return []; },
     async sessionProject() { return {}; },
+    async pickRunner() { return undefined; },
     async progressInputs() { return undefined; },
     async storeProgress() {},
     async materialiseChore() { return { skipped: "test" }; },
@@ -61,6 +64,7 @@ function localActivities(manager: SessionManager): LocalActivities {
     draftProject: async () => { throw new Error("not in this test"); },
     draftWorkflow: async () => { throw new Error("not in this test"); },
     assessProgress: async () => { throw new Error("not in this test"); },
+    writeLessons: async () => ({ lessons: [] }),
     describeRunner: () => manager.describe(),
     startSession: async (spec) => ({ vendorSessionRef: (await manager.start(spec)).vendorSessionRef }),
     pumpEvents: ({ sessionId, fromSeq }) => manager.pump(sessionId, fromSeq, (seq) => Context.current().heartbeat(seq), Context.current().cancellationSignal).catch((e) => {
@@ -69,6 +73,7 @@ function localActivities(manager: SessionManager): LocalActivities {
     }),
     resumeSession: ({ sessionId, callId, approved, grantIds }) => manager.resume(sessionId, callId, approved, grantIds),
     inspectWorkdir: ({ workdir }) => manager.inspect(workdir),
+    sendToSession: ({ sessionId, text, final }) => manager.send(sessionId, text, final),
     cancelSession: ({ sessionId, reason }) => manager.cancel(sessionId, reason),
   };
 }

@@ -5,7 +5,7 @@ import { localQueue } from "@jj/workflows";
 import { SessionManager } from "./sessions.js";
 import { WorktreeManager } from "./worktrees.js";
 import { ApiClient } from "./api.js";
-import { draftProject, draftWorkflow, assessProgress, collectFacts, defaultLLM } from "@jj/ingest";
+import { draftProject, draftWorkflow, assessProgress, writeLessons, collectFacts, defaultLLM } from "@jj/ingest";
 
 const runnerId = process.env.RUNNER_ID ?? "laptop";
 const manager = new SessionManager(new ApiClient(), new WorktreeManager(), runnerId);
@@ -16,6 +16,7 @@ console.log(`[runner-daemon] ingestion LLM: ${llm?.name ?? "mock (no ANTHROPIC_A
 const activities: LocalActivities = {
   draftProject: ({ workdir, hint }) => draftProject(workdir, hint, llm),
   draftWorkflow: (src) => draftWorkflow(src, llm),
+  writeLessons: (i) => writeLessons(i, llm),
   assessProgress: async (i) => assessProgress({ ...i, workdirFacts: i.workdir ? await collectFacts(i.workdir, 4000).catch(() => undefined) : undefined }, llm),
   describeRunner: () => manager.describe(),
   startSession: async (spec) => { const h = await manager.start(spec); return { vendorSessionRef: h.vendorSessionRef }; },
@@ -25,6 +26,7 @@ const activities: LocalActivities = {
   }),
   resumeSession: ({ sessionId, callId, approved, grantIds }) => manager.resume(sessionId, callId, approved, grantIds),
   inspectWorkdir: ({ workdir }) => manager.inspect(workdir),
+  sendToSession: ({ sessionId, text, final }) => manager.send(sessionId, text, final).catch((e) => { if (e?.code === "SESSION_NOT_LIVE") throw ApplicationFailure.nonRetryable(e.message, "SESSION_NOT_LIVE"); throw e; }),
   cancelSession: ({ sessionId, reason }) => manager.cancel(sessionId, reason),
 };
 
@@ -36,5 +38,8 @@ const worker = await Worker.create({
   activities,
   // Workflow code runs on the cloud worker; this host only runs activities.
 });
+const api = new ApiClient();
+const beat = async () => api.heartbeat({ ...(await manager.registry()), queue: localQueue(runnerId) });
+await beat(); setInterval(() => void beat(), 30_000);
 console.log(`[runner-daemon] ${runnerId} on ${localQueue(runnerId)}; credentials never leave this host`);
 await worker.run();
