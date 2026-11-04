@@ -1,0 +1,90 @@
+{
+  "id": "workflow-benchmark",
+  "title": "Workflow benchmark",
+  "description": "Run a workflow on two vendors and compare outcome, cost and parks.",
+  "steps": [
+    {
+      "name": "run",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. You were given a workflow id and a project id. Start the workflow twice via POST /projects/:id/continue with steps copied from the workflow: once with preferredVendor claude, once with openai (or gemini if openai is not configured). Record both task ids in BENCH.md and wait for both tasks to reach done, stopped or awaiting_go_ahead (poll GET /tasks/:id/status every 30 s, up to 40 minutes).",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 120
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "compare",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. For both tasks read sessions and events: duration, tokens, cost, parks, outcome, and the produced artifacts. Judge quality of the artifacts against the workflow's description. Write the comparison and a recommendation (which vendor for this workflow, and why) into BENCH.md.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 30
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "id": "chore-health",
+  "title": "Chore health",
+  "description": "Find chores that are skipping, failing or costing more than they should.",
+  "suggestedChore": {
+    "cron": "15 8 * * 1-5",
+    "mode": "auto",
+    "reason": "Daily, cheap."
+  },
+  "steps": [
+    {
+      "name": "check",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. GET /chores and, for each, its recent tasks via GET /tasks and the sessions behind them. Flag: last three fires all skipped or stopped, cost rising week on week, same park every fire, next fire time missing. Write CHORES.md with one line per chore and a recommended action (pause, change mode, widen a grant, fix the prompt). Pause any chore whose last three fires all failed via POST /chores/:id/pause and say so.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 40
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

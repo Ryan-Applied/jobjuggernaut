@@ -1,0 +1,72 @@
+{
+  "id": "stale-project-sweep",
+  "title": "Stale project sweep",
+  "description": "Projects with no sessions for 7 days: summarise where they stand and recommend continue, pause or archive.",
+  "suggestedChore": {
+    "cron": "0 9 * * 5",
+    "mode": "auto",
+    "reason": "Friday review."
+  },
+  "steps": [
+    {
+      "name": "sweep",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. GET /projects. For each project whose last session is older than 7 days (or has none): read its goal, progress and epics, inspect its workdir if present (git log, open branches, dirty files), and write STALE.md with: project, days idle, what was last done, what is blocking, and a recommendation (continue with this prompt / pause the chore / archive) with reasons.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 40
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 40
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

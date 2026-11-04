@@ -1,0 +1,117 @@
+{
+  "id": "session-postmortem",
+  "title": "Session postmortem",
+  "description": "For a failed, cancelled or over-budget session: what happened, why, and what to change.",
+  "steps": [
+    {
+      "name": "reconstruct",
+      "prompt": "Use the control plane API at $API_URL (curl is fine; JSON responses). Useful routes: GET /projects, GET /projects/:id, GET /sessions, GET /sessions/:id/events, GET /graph/:id, GET /workflows, GET /workflows/:id, GET /brief?hours=N, GET /audit?limit=N, GET /chores, GET /ledgers?status=signed, GET /proposals, POST /workflows, POST /projects, POST /projects/:id/continue, POST /chores, POST /tasks/:id/go. You were given a session id. GET /sessions/:id/events and GET /graph/:id. Reconstruct the timeline: prompt, each tool call and its decision, parks and how they resolved, cost curve, the final outcome. Write POSTMORTEM.md: timeline, root cause in one paragraph, contributing factors, what the agent could not have known, and 3 concrete changes (prompt, grant template, skill, or workflow step) with the exact text.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 20
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        }
+      ],
+      "maxCostGbp": 1.5,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "compare",
+      "prompt": "Using the similar sessions from the graph, compare this session with the two most similar successful ones: where did the paths diverge, and which change from POSTMORTEM.md would have prevented it? Append a Comparison section.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "review",
+      "prompt": "Review POSTMORTEM.md for blame-free wording and for whether the root cause is evidenced by the events. Report only.",
+      "preferredVendor": "gemini",
+      "reviewerOfPrevious": true,
+      "skills": [
+        "review-findings"
+      ],
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        }
+      ],
+      "maxCostGbp": 0.3,
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}

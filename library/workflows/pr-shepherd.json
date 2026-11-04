@@ -1,0 +1,124 @@
+{
+  "id": "pr-shepherd",
+  "title": "PR shepherd",
+  "description": "Every jj/* branch with commits gets tests run, a PR opened (parks), and a second-vendor review.",
+  "suggestedChore": {
+    "cron": "0 17 * * 1-5",
+    "mode": "assist",
+    "reason": "End of day: nothing leaves the machine without a park."
+  },
+  "steps": [
+    {
+      "name": "triage",
+      "prompt": "List jj/* branches ahead of the integration branch (git). For each: run the test command from CLAUDE.md, rebase onto the integration branch if clean, and write BRANCHES.md with status (green, red, conflicts) and a one-line summary of the diff.",
+      "intendedActions": [
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 60
+          }
+        },
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 40
+          }
+        },
+        {
+          "tool": "Write",
+          "scope": {},
+          "cap": {
+            "count": 1
+          }
+        }
+      ],
+      "maxCostGbp": 2,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "open-prs",
+      "prompt": "For each green branch in BRANCHES.md, push it and open a PR with a title, a summary and a test plan. Each push and PR will park for approval; that is expected.",
+      "intendedActions": [
+        {
+          "tool": "git.push",
+          "scope": {
+            "branch": "jj/*"
+          },
+          "cap": {
+            "count": 5
+          }
+        },
+        {
+          "tool": "github.pr",
+          "scope": {},
+          "cap": {
+            "count": 5
+          }
+        },
+        {
+          "tool": "Bash",
+          "scope": {},
+          "cap": {
+            "count": 10
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "skills": [],
+      "connectors": []
+    },
+    {
+      "name": "review",
+      "prompt": "Review each opened PR's diff for defects, missing tests and style. Leave your findings in REVIEW.md per branch. Do not edit code.",
+      "preferredVendor": "gemini",
+      "reviewerOfPrevious": true,
+      "skills": [
+        "review-findings"
+      ],
+      "intendedActions": [
+        {
+          "tool": "Read",
+          "scope": {},
+          "cap": {
+            "count": 100
+          }
+        }
+      ],
+      "maxCostGbp": 1,
+      "connectors": []
+    }
+  ],
+  "grantTemplate": [
+    {
+      "action": "Read",
+      "scope": {},
+      "cap": {
+        "count": 200
+      }
+    },
+    {
+      "action": "Glob",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Grep",
+      "scope": {},
+      "cap": {
+        "count": 50
+      }
+    },
+    {
+      "action": "Bash",
+      "scope": {},
+      "cap": {
+        "count": 60
+      }
+    }
+  ]
+}
