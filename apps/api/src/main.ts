@@ -101,7 +101,7 @@ app.get("/events", (c) => {
 
 // --- commands ------------------------------------------------------------------
 const StartTask = z.object({
-  title: z.string().optional(), workflowId: z.string().uuid(), runnerId: z.string().default(process.env.DEFAULT_RUNNER_ID ?? "laptop"), grantIds: z.array(z.string().uuid()).default([]),
+  title: z.string().optional(), workflowId: z.string().uuid(), runnerId: z.string().optional(), grantIds: z.array(z.string().uuid()).default([]),
   steps: z.array(z.object({ name: z.string(), prompt: z.string(), skills: z.array(z.string()).optional(), connectors: z.array(z.string()).optional(), requires: z.array(z.string()).optional(), preferredVendor: z.enum(["claude", "openai", "gemini"]).optional(), reviewerOfPrevious: z.boolean().optional(), maxCostGbp: z.number().positive(), after: z.array(z.string()).optional(), retry: z.number().int().min(0).max(5).optional(), onFailure: z.string().optional(), interactive: z.boolean().optional(), idleMinutes: z.number().int().positive().optional() })).min(1).optional(),
   scheduledFor: z.string().datetime().optional(),   // set => queued for the overnight batch instead of starting now
   priority: z.number().int().optional(), runnerAffinity: z.enum(["fixed", "any"]).optional(), budgetGbp: z.number().positive().optional(), deadline: z.string().datetime().optional(),
@@ -112,7 +112,7 @@ app.post("/tasks", async (c) => {
   const steps = body.steps ?? wf?.props?.steps;
   if (!steps?.length) return c.json({ error: "no steps: pass steps or a workflowId with a definition" }, 400);
   const title = body.title ?? wf?.title ?? "Task";
-  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? "laptop", grantIds: body.grantIds, steps, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline };
+  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? process.env.DEFAULT_RUNNER_ID ?? "laptop", grantIds: body.grantIds, steps, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline };
   if (body.scheduledFor) {
     await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: body.workflowId, scheduledFor: body.scheduledFor, state: "queued", priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline })}::jsonb)`);
     return c.json({ taskId: def.taskId, queued: true });

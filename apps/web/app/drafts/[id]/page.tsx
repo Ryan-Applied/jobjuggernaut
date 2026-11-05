@@ -1,2 +1,5 @@
 import { DraftReview } from "@/components/DraftReview";
-export default function Page({ params }: { params: { id: string } }) { return <DraftReview id={params.id} />; }
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <DraftReview id={id} />;
+}

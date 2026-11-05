@@ -62,7 +62,7 @@ export class OpenAIRunner implements Runner {
           const calls = res.output.filter((o): o is OpenAI.Responses.ResponseFunctionToolCall => o.type === "function_call");
           if (!calls.length) {
             // Turn complete. Interactive: wait for a follow-up (or close); otherwise finish.
-            if (l.closed) break;
+            if (l.closed && !l.inbox.length) break;
             if (!l.inbox.length) await new Promise<void>((r) => l.inboxWaiters.push(r));
             const next = l.inbox.shift(); if (next === undefined) break;
             push(l.emit({ type: "message", role: "user", text: next }));

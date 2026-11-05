@@ -51,7 +51,7 @@ export class MockRunner implements Runner {
       push(l.emit({ type: "message", role: "assistant", text: `mock: working on "${spec.prompt}"`, tokensIn: 10, tokensOut: 20 }));
       await runDirectives(spec.prompt);
       // interactive: keep taking follow-ups until closed (B1)
-      while (!l.closed && !l.cancelled) {
+      while ((!l.closed || l.inbox.length > 0) && !l.cancelled) {
         if (!l.inbox.length) await new Promise<void>((r) => l.inboxWaiters.push(r));
         const next = l.inbox.shift(); if (next === undefined) continue;
         push(l.emit({ type: "message", role: "assistant", text: `mock: follow-up "${next}"`, tokensIn: 5, tokensOut: 5 }));
