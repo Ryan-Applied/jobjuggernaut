@@ -8,7 +8,7 @@
     "dev:kill": "./scripts/dev.sh kill",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:integration": "pnpm --filter @jj/runner-daemon test",
+    "test:integration": "pnpm --filter @jj/runner-daemon test:integration",
     "dev:mock": "JJ_MOCK_RUNNER=1 ./scripts/dev.sh",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d",
     "dev:api": "pnpm --filter @jj/api dev",

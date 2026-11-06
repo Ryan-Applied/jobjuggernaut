@@ -57,7 +57,8 @@ With no grants loaded, every tool call parks and shows Approve once / Deny in th
 
 ## Tests
 
-- `pnpm test` runs unit tests (policy matcher).
+- `pnpm test` runs the workspace unit tests without requiring Postgres or Temporal.
+- `pnpm --filter @jj/indexer test:integration` runs the indexer suite against Postgres + pgvector; set `DATABASE_URL` for the test database.
 - `pnpm test:integration` runs the Phase 1 exit test with the **mock runner** against a Temporal server on `TEMPORAL_ADDRESS`, in its own namespace (`jj-test`), so it is safe alongside the dev stack: 5 parallel sessions visible under 2 s, park → approve → resume, grant allow, approver deny, cancel mid-run, and runner-daemon restart mid-session.
 - `pnpm dev:mock` runs the whole stack with the mock runner so the UI can be exercised with no vendor keys.
 

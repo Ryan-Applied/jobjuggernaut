@@ -13,6 +13,7 @@ import { projectRoutes } from "./projects.routes.js";
 import { ledgerRoutes, ledgerForTaskMode, signedGrantIdsForTask } from "./ledgers.routes.js";
 import { choreRoutes, ensureSystemSchedules } from "./chores.routes.js";
 import { ingestRoutes } from "./ingest.routes.js";
+import { resolveRunnerId } from "./runner-selection.js";
 
 const { db } = createDb();
 const bus = new EventBus();
@@ -112,7 +113,7 @@ app.post("/tasks", async (c) => {
   const steps = body.steps ?? wf?.props?.steps;
   if (!steps?.length) return c.json({ error: "no steps: pass steps or a workflowId with a definition" }, 400);
   const title = body.title ?? wf?.title ?? "Task";
-  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: body.runnerId ?? wf?.props?.runnerId ?? process.env.DEFAULT_RUNNER_ID ?? "laptop", grantIds: body.grantIds, steps, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline };
+  const def: TaskDefinition = { taskId: crypto.randomUUID(), title, workflowId: body.workflowId, runnerId: resolveRunnerId(body.runnerId, wf?.props?.runnerId, process.env.DEFAULT_RUNNER_ID), grantIds: body.grantIds, steps, priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline };
   if (body.scheduledFor) {
     await db.execute(sql`insert into nodes (id, type, title, props) values (${def.taskId}, 'task', ${title}, ${JSON.stringify({ steps, runnerId: def.runnerId, workflowId: body.workflowId, scheduledFor: body.scheduledFor, state: "queued", priority: body.priority, runnerAffinity: body.runnerAffinity, budgetGbp: body.budgetGbp, deadline: body.deadline })}::jsonb)`);
     return c.json({ taskId: def.taskId, queued: true });

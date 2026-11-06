@@ -120,8 +120,9 @@ function task(title: string, prompt: string, extra: Partial<TaskDefinition["step
 const start = (def: TaskDefinition) => client.workflow.start(TaskWorkflow, { args: [def], taskQueue: CLOUD_QUEUE, workflowId: `task-${def.taskId}` });
 const sessionIdOf = (taskId: string) => events.find((e) => e.type === "started" && (nodes.get(e.sessionId) as any)?.taskId === taskId)?.sessionId;
 const waitFor = async (pred: () => boolean, ms = 20_000) => { const t0 = Date.now(); while (!pred()) { if (Date.now() - t0 > ms) throw new Error("timeout"); await new Promise((r) => setTimeout(r, 50)); } };
+const integration = process.env.JJ_RUN_TEMPORAL_INTEGRATION === "1" ? describe : describe.skip;
 
-describe("Phase 1 exit test (mock runner, real Temporal)", () => {
+integration("Phase 1 exit test (mock runner, real Temporal)", () => {
   it("runs 5 sessions in parallel across 2 vendors, all visible within 2 s", async () => {
     const defs = [
       task("claude 1", "hello"), task("claude 2", "hello"), task("claude 3", "hello"),

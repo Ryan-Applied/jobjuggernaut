@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --testTimeout 60000"
+    "test": "vitest run --testTimeout 60000",
+    "test:integration": "JJ_RUN_INDEXER_INTEGRATION=1 vitest run src/indexer.test.ts --testTimeout 60000"
   },
   "dependencies": {
     "@jj/core": "workspace:*",

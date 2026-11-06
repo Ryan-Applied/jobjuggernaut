@@ -12,7 +12,8 @@ export const PRICES: Record<string, Price> = {
 };
 export const USD_TO_GBP = Number(process.env.JJ_USD_TO_GBP ?? 0.78);
 export function priceFor(model: string): Price {
-  const key = Object.keys(PRICES).find((k) => model.startsWith(k)) ?? Object.keys(PRICES).find((k) => model.includes(k.split("-")[0])) ?? "claude-sonnet-4-6";
+  const keys = Object.keys(PRICES);
+  const key = [...keys].sort((a, b) => b.length - a.length).find((k) => model.startsWith(k)) ?? keys.find((k) => model.includes(k.split("-")[0])) ?? "claude-sonnet-4-6";
   return PRICES[key];
 }
 export function costGbp(model: string, tokensIn: number, tokensOut: number): number {

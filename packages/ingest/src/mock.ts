@@ -8,7 +8,7 @@ export function mockProjectDraft(f?: WorkdirFacts, hint?: string): ProjectDraft 
   const lang = f?.manifests["package.json"] ? "node" : f?.manifests["pyproject.toml"] || f?.manifests["requirements.txt"] ? "python" : f?.manifests["go.mod"] ? "go" : "unknown";
   const readme = f?.docs["README.md"] ?? f?.docs["readme.md"] ?? "";
   const firstLine = readme.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.trim();
-  const todos = Object.values(f?.docs ?? {}).join("\n").split("\n").filter((l) => /^\s*[-*]\s*\[ \]/.test(l)).slice(0, 5).map((l) => l.replace(/^\s*[-*]\s*\[ \]\s*/, ""));
+  const todos = [...new Set(Object.values(f?.docs ?? {}).join("\n").split("\n").filter((l) => /^\s*[-*]\s*\[ \]/.test(l)).map((l) => l.replace(/^\s*[-*]\s*\[ \]\s*/, "")))].slice(0, 5);
   return {
     title: name, goal: hint ?? firstLine ?? `Keep ${name} moving: fix failing checks, then work the TODO list.`,
     summary: `${lang} project at ${f?.path ?? "no folder"}; ${f?.totalFiles ?? 0} files; ${f?.recentCommits.length ?? 0} recent commits seen.`,

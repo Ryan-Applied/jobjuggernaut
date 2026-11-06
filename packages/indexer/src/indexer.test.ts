@@ -7,6 +7,7 @@ import { indexSession, proposeForWorkflow, HashEmbedder } from "./index.js";
 const { db } = createDb(process.env.DATABASE_URL ?? "postgres://jj:jj@127.0.0.1:5432/jj");
 const WF = crypto.randomUUID();
 const ts = (i: number) => new Date(Date.now() + i * 1000).toISOString();
+const integration = process.env.JJ_RUN_INDEXER_INTEGRATION === "1" ? describe : describe.skip;
 
 function session(prompt: string, tools: string[], parked = false): { id: string; events: SessionEvent[] } {
   const id = crypto.randomUUID(); let seq = 0;
@@ -30,7 +31,7 @@ async function seed(s: { id: string; events: SessionEvent[] }, title: string) {
   await appendEvents(db, s.events);
 }
 
-describe("indexer against Postgres + pgvector", () => {
+integration("indexer against Postgres + pgvector", () => {
   const a = session("Monday Jira triage: review open SEC tickets and comment", ["jira.search", "jira.addComment", "confluence.getPage"], true);
   const b = session("Monday Jira triage: review open SEC tickets and comment carryover", ["jira.search", "jira.addComment", "confluence.getPage"], true);
   const c = session("Monday Jira triage: review open SEC tickets, comment, escalate", ["jira.search", "jira.addComment", "confluence.getPage"], true);
