@@ -12,19 +12,19 @@ jobs:
     env:
       DATABASE_URL: postgres://jj:jj@localhost:5432/jj
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 9 }
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
-      - run: pnpm --filter @jj/policy test
+      - name: Workspace unit tests
+        run: pnpm test
       - run: pnpm db:migrate
-      - run: pnpm --filter @jj/indexer test
+      - run: pnpm --filter @jj/indexer test:integration
       - name: Temporal dev server
         run: |
           curl -sL -o t.tgz https://github.com/temporalio/cli/releases/download/v1.3.0/temporal_cli_1.3.0_linux_amd64.tar.gz
           tar xzf t.tgz && (./temporal server start-dev --headless --ip 127.0.0.1 --port 7233 &) && sleep 5
-      - run: pnpm --filter @jj/runner-daemon test
-        env: { TEMPORAL_ADDRESS: 127.0.0.1:7233 }
+      - run: pnpm test:integration
+        env: { TEMPORAL_ADDRESS: "127.0.0.1:7233" }
